@@ -1,6 +1,7 @@
 #pragma once
 
 #include <engine/engine.hpp>
+#include "drone_patrol.hpp"
 
 class Game {
 public:
@@ -29,4 +30,7 @@ private:
     engine::EntityId exit_{};
 
     bool scalingKeyWasPressed_ = false;
+    bool jumpKeyWasPressed_ = false;
+    bool grounded_ = false;
+    DronePatrol dronePatrol_;
 };
