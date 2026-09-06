@@ -1,4 +1,4 @@
-#include "drone_patrol.hpp"
+#include <robot_factory_escape/drone_patrol.hpp>
 #include <iostream>
 #include <stdexcept>
 
@@ -16,14 +16,15 @@ int main() {
         patrol.advance(scene, drone, 0.f);
         require(scene.transform(drone).position.x == 1100.f, "Incorrect starting position");
         patrol.distance = 0.f;
-        patrol.advance(scene, drone, 550.f / 180.f);
-        require(std::abs(scene.transform(drone).position.x - 1500.f) < 0.01f, "Missed right endpoint");
+        patrol.advance(scene, drone, 1100.f / 180.f);
+        require(std::abs(scene.transform(drone).position.x - 1600.f) < 0.01f, "Missed right endpoint");
         patrol.advance(scene, drone, 1.f);
-        require(std::abs(scene.transform(drone).position.x - 1320.f) < 0.01f, "Did not reverse");
+        require(std::abs(scene.transform(drone).position.x - 1420.f) < 0.01f, "Did not reverse");
         for (int i = 0; i < 10000; ++i) {
             patrol.advance(scene, drone, 1.f / 120.f);
             const auto p = scene.transform(drone).position;
-            require(p.x >= 950.f && p.x <= 1500.f && p.y == 840.f, "Patrol escaped bounds");
+            require(p.x >= DronePatrol::left && p.x <= DronePatrol::right &&
+                    p.y == DronePatrol::height, "Patrol escaped bounds");
         }
         require(scene.getRigidBody(drone) == nullptr, "Drone must not receive gravity");
         const auto robot = scene.createEntity();

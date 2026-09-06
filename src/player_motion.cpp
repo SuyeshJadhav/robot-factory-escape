@@ -1,4 +1,5 @@
-#include "player_motion.hpp"
+#include <robot_factory_escape/player_motion.hpp>
+#include <robot_factory_escape/game_settings.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -7,7 +8,7 @@ bool jumpIfGrounded(engine::RigidBody& body, bool& grounded, bool newPress) {
     if (!newPress || !grounded) {
         return false;
     }
-    body.velocity.y = -650.f; // About 215 pixels high with gravity at 980.
+    body.velocity.y = -gameSettings::jumpSpeed;
     grounded = false;
     return true;
 }

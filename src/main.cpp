@@ -1,4 +1,4 @@
-#include "game.hpp"
+#include <robot_factory_escape/game.hpp>
 
 #include <exception>
 

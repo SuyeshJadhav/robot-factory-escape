@@ -1,6 +1,8 @@
-#include "player_motion.hpp"
+#include <robot_factory_escape/player_motion.hpp>
+#include <robot_factory_escape/game_settings.hpp>
 
 #include <array>
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
@@ -16,7 +18,7 @@ bool near(float actual, float expected) {
 }
 struct Fixture {
     engine::Scene scene;
-    engine::PhysicsSystem physics{980.f};
+    engine::PhysicsSystem physics{gameSettings::gravity};
     engine::EntityId player = box({0.f, 0.f}, {20.f, 20.f});
     bool grounded = false;
 
@@ -69,7 +71,7 @@ int main() {
             Fixture f;
             const auto platform = f.box({-100.f, 100.f}, {300.f, 40.f});
             f.position() = {0.f, 141.f};
-            f.body().velocity.y = -650.f;
+            f.body().velocity.y = -gameSettings::jumpSpeed;
             f.step(platform, 1.f / 120.f);
             require(near(f.position().y, 140.f) && near(f.body().velocity.y, 0.f), "Underside response failed");
             require(!f.grounded, "Underside counted as ground");
@@ -90,7 +92,23 @@ int main() {
             f.step(floor, 2.f);
             require(near(f.position().y, 280.f) && f.grounded, "Slow frame crossed the floor");
         }
-        std::cout << "Landing, wall faces, underside, jumping, walk-off, and slow-frame checks passed.\n";
+        {
+            Fixture f;
+            const auto floor = f.box({-100.f, 300.f}, {1000.f, 100.f});
+            f.position() = {0.f, 280.f};
+            f.grounded = true;
+            jumpIfGrounded(f.body(), f.grounded, true);
+            float peakHeight = 0.f;
+            float airtime = 0.f;
+            while (!f.grounded && airtime < 2.f) {
+                f.step(floor, 1.f / 120.f);
+                airtime += 1.f / 120.f;
+                peakHeight = std::max(peakHeight, 280.f - f.position().y);
+            }
+            require(f.grounded && airtime > 0.9f && airtime < 1.05f, "Jump airtime outside tuned range");
+            require(peakHeight > 200.f && peakHeight < 225.f, "Jump cannot comfortably clear the crate");
+        }
+        std::cout << "Movement, collision, and tuned jump height/airtime checks passed.\n";
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
         return 1;

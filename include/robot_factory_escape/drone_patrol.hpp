@@ -5,11 +5,11 @@
 
 struct DronePatrol {
     // Positions describe the drone's top-left corner in logical coordinates.
-    static constexpr float left = 950.f;
-    static constexpr float right = 1500.f;
+    static constexpr float left = 500.f;
+    static constexpr float right = 1600.f;
     static constexpr float height = 840.f;
     static constexpr float speed = 180.f;
-    float distance = 150.f; // Start at x=1100, moving right.
+    float distance = 600.f; // Start at x=1100, moving right.
 
     void advance(engine::Scene& scene, engine::EntityId drone, float dt) {
         constexpr float length = right - left;
