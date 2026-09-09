@@ -10,6 +10,16 @@ namespace {
 constexpr glm::vec2 levelSize{1920.f, 1080.f};
 constexpr glm::vec2 robotSpawn{120.f, 300.f};
 constexpr float robotSpeed = 300.f; // Logical pixels per second.
+constexpr glm::vec2 platformSize{300.f, 66.f};
+constexpr glm::vec2 platformColliderSize{300.f, 24.f};
+constexpr std::array platformPositions{
+    // Uphill steps rise 190 pixels: close to the roughly 211-pixel jump limit.
+    glm::vec2{330.f, 750.f},
+    glm::vec2{650.f, 560.f},
+    glm::vec2{980.f, 740.f},
+    glm::vec2{1280.f, 550.f},
+    glm::vec2{1560.f, 360.f},
+};
 } // namespace
 
 Game::Game()
@@ -35,29 +45,54 @@ void Game::createLevel() {
     const std::string assetDir = GAME_ASSET_DIR;
     backdropTexture_ = renderer_.loadTexture(assetDir + "background/cyberpunk_background_backdropa_idle.png");
     const auto platformTexture = renderer_.loadTexture(assetDir + "platform/cyberpunk_platform_antigravcart_idle.png");
+
+    const auto hudFont = renderer_.loadFont(GAME_FONT_PATH, 24.f);
+    const auto titleFont = renderer_.loadFont(GAME_FONT_PATH, 34.f);
+    const auto createText = [this](glm::vec2 position, std::string value,
+                                   engine::FontId font, engine::Color color) {
+        const auto id = scene_.createEntity();
+        scene_.transform(id).position = position;
+        scene_.addText(id, {.val = std::move(value), .font = font, .color = color});
+        return id;
+    };
+    createText({32.f, 18.f}, "ROBOT FACTORY ESCAPE", titleFont, {80, 255, 220, 255});
+    createText({32.f, 62.f}, "A/D MOVE   SPACE JUMP   R RESTART   P SCALE",
+               hudFont, {235, 240, 255, 255});
+    createText({32.f, 94.f}, "CLIMB THE PLATFORMS  ->  REACH THE EXIT",
+               hudFont, {255, 190, 55, 255});
+    statusText_ = createText({32.f, 126.f}, "STATUS: AVOID THE PATROL DRONE",
+                             hudFont, {255, 110, 120, 255});
+
     // Most boxes have matching visual and collision bounds, with scale left at 1.
     floor_ = createBox({0.f, 940.f}, {1920.f, 140.f}, {70, 78, 91, 255});
+    solids_.push_back(floor_);
     robot_ = createBox(robotSpawn, {96.f, 128.f}, {72, 205, 230, 255});
     // The cyborg is narrower than its animation cell; keep the full visual height
     // while tightening horizontal collision to the character's body.
     scene_.addCollider(robot_, {.size = {80.f, 128.f}});
 
-    // The source platform has a wide solid deck and transparent hanging space.
-    // Render the deck at its natural proportions, but collide only with its top.
-    platform_ = scene_.createEntity();
-    scene_.transform(platform_).position = {570.f, 735.f};
-    scene_.addShape(platform_, {.size = {360.f, 79.f}, .color = {255, 255, 255, 255},
-                                .texture = std::nullopt});
-    scene_.addCollider(platform_, {.size = {360.f, 28.f}});
+    // Reuse one platform sheet for a staircase of reachable Mario-like jumps.
+    // The collider covers only the solid deck, not the transparent machinery below it.
     engine::SpriteSheetLayout platformLayout;
     platformLayout.frames.push_back({{0.f, 0.f}, {1024.f, 224.f}});
     const auto platformSheet = renderer_.createSpriteSheet(platformTexture, std::move(platformLayout));
-    scene_.addSpriteAnimation(platform_, engine::SpriteAnimation::uniform(platformSheet, {0}, 1.f));
+    for (const auto position : platformPositions) {
+        const auto platform = scene_.createEntity();
+        scene_.transform(platform).position = position;
+        scene_.addShape(platform, {.size = platformSize, .color = {255, 255, 255, 255},
+                                   .texture = std::nullopt});
+        scene_.addCollider(platform, {.size = platformColliderSize});
+        scene_.addSpriteAnimation(platform,
+                                  engine::SpriteAnimation::uniform(platformSheet, {0}, 1.f));
+        solids_.push_back(platform);
+    }
 
-    drone_ = createBox({1100.f, 840.f}, {130.f, 80.f}, {235, 85, 93, 255});
+    drone_ = createBox({0.f, 0.f}, {130.f, 80.f}, {235, 85, 93, 255});
+    dronePatrol_.advance(scene_, drone_, 0.f);
     // The trigger remains a simple collider; drawExit provides the themed artwork.
     exit_ = scene_.createEntity();
-    scene_.transform(exit_).position = {1740.f, 800.f};
+    // The exit sits on the final platform, so walking across the floor is not enough.
+    scene_.transform(exit_).position = {1740.f, platformPositions.back().y - 140.f};
     scene_.addCollider(exit_, {.size = {100.f, 140.f}});
 
     // Only the robot participates in gravity. The drone follows a manual path.
@@ -67,16 +102,16 @@ void Game::createLevel() {
 }
 
 void Game::run() {
-    // Exclude construction time from the first gameplay frame.
-    clock_.tick();
     while (!window_.shouldClose()) {
         window_.pollEvents();
         if (window_.shouldClose()) {
             break;
         }
-        clock_.tick();
         handleInput();
-        update(clock_.deltaSeconds());
+        simulation_.beginFrame();
+        while (simulation_.step()) {
+            update(gameTime_.tickSeconds());
+        }
         render();
     }
 }
@@ -99,6 +134,7 @@ void Game::handleInput() {
     if (restartPressed) {
         progress_.restart(scene_, robot_, drone_, robotSpawn, grounded_, dronePatrol_);
         sprites_.reset(scene_, robot_, drone_);
+        setStatusText("STATUS: AVOID THE PATROL DRONE");
         engine::log::info("Restarted. Reach the exit!");
         return;
     }
@@ -114,30 +150,38 @@ void Game::handleInput() {
 
 void Game::update(float deltaSeconds) {
     if (progress_.won) return;
-    const std::array solids{floor_, platform_};
     // Advance both movers on the same clock and check contact each small step.
     float remaining = std::clamp(deltaSeconds, 0.f, 0.1f);
     while (remaining > 0.f) {
         const float step = std::min(remaining, 1.f / 120.f);
         remaining -= step;
         dronePatrol_.advance(scene_, drone_, step);
-        movePlayer(scene_, physics_, robot_, solids, step, grounded_);
+        movePlayer(scene_, physics_, robot_, solids_, step, grounded_);
         if (resetOnDroneContact(scene_, physics_, robot_, drone_, robotSpawn, grounded_)) {
             sprites_.reset(scene_, robot_, drone_);
+            setStatusText("STATUS: DRONE HIT - TRY AGAIN");
             engine::log::info("Drone contact! Back to the start.");
             break;
         }
         if (scene_.transform(robot_).position.y > levelSize.y) {
             resetRobot(scene_, robot_, robotSpawn, grounded_);
             sprites_.reset(scene_, robot_, drone_);
+            setStatusText("STATUS: MISSED A JUMP - BACK TO START");
             break;
         }
         if (progress_.checkExit(scene_, physics_, robot_, exit_)) {
+            setStatusText("ESCAPED! PRESS R TO PLAY AGAIN");
             engine::log::info("You escaped! Press R to play again.");
             break;
         }
     }
     sprites_.update(scene_, robot_, grounded_, progress_.won, deltaSeconds);
+}
+
+void Game::setStatusText(std::string message) {
+    if (auto* text = scene_.getText(statusText_)) {
+        text->val = std::move(message);
+    }
 }
 
 void Game::render() {

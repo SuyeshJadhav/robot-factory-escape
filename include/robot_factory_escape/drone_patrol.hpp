@@ -7,7 +7,8 @@ struct DronePatrol {
     // Positions describe the drone's top-left corner in logical coordinates.
     static constexpr float left = 500.f;
     static constexpr float right = 1600.f;
-    static constexpr float height = 840.f;
+    // Cross the player's body on the second and fourth platforms.
+    static constexpr float height = 440.f;
     static constexpr float speed = 180.f;
     float distance = 600.f; // Start at x=1100, moving right.
 

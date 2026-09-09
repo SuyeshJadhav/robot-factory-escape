@@ -1,6 +1,6 @@
 # Robot Factory Escape — learning sandbox
 
-A runnable scaffold consuming the engine in the repository two directories above.
+A runnable scaffold consuming the engine from the sibling `GEF_engine` repository.
 Artwork is bundled in `assets/sprites/`; no additional game dependencies are needed. Open this directory as a
 CMake project in CLion, or use the commands below from this directory.
 
@@ -16,26 +16,33 @@ Build output stays in this directory's ignored `build/` folder.
 ## What works
 
 - Window, event loop, frame timing, and rectangle rendering.
-- Cyberpunk backdrop and a textured raised platform with an animated cyborg,
+- Cyberpunk backdrop and five textured raised platforms with an animated cyborg,
   drone, and code-drawn factory exit. The floor remains a basic shape.
 - Matching shape/collider sizes. Only the robot has a rigid body.
 - A/D moves the robot at 300 logical pixels per second. Releasing both keys stops
   horizontal movement; holding both cancels out. Gravity accelerates it downward.
-- The robot lands on the floor and platform, stops against the platform's sides, and
+- The robot lands on the floor and platforms, stops against platform sides, and
   stops rising when it hits an underside. Space jumps once per press while grounded.
 - The robot starts above the floor and resets its position and velocity after
   falling below the screen (for example, after walking off the floor's end).
 - P toggles scaling once per press. Starts proportional at a 1920×1080 logical size.
+- The engine text module renders a HUD with controls, the objective, and live status.
 - Closing the window exits cleanly.
 
 Movement, solid collisions, jumping, drone patrol, winning, and restart are implemented. The drone
 moves between x=500 and x=1600 at 180 logical pixels per second without gravity.
+Its patrol is at y=440, crossing the robot's path on the second and fourth platforms.
 Contact resets the robot position, velocity, and grounded state; the drone keeps
 its patrol progress. The exit uses a cyan frame with orange factory accents;
 touching it turns its status lights green and freezes gameplay. Press R to restart
 at any time: the robot, drone patrol, and exit color reset. P still works after
 winning, and restarting preserves the selected scaling mode.
 Constant scaling can crop this room in a smaller window; proportional fits it.
+The exit is elevated above a five-platform route, so reaching it requires a sequence
+of jumps rather than simply walking across the factory floor.
+Uphill steps rise 190 logical pixels, close to the roughly 211-pixel simulated jump
+height. The middle platform provides a descent before the final two climbs; wait
+for the drone to pass before crossing the exposed platforms.
 
 ## Where to work next
 
@@ -76,9 +83,9 @@ ctest --test-dir build --output-on-failure
 ## Artwork
 
 The supplied sprite folder now lives in `assets/sprites/`. The background is drawn
-first across the 1920×1080 logical scene. The platform uses the solid upper 1024×224
-area of its source image and renders at 360×79. Its collision surface is a separate
-360×28 rectangle across the top, so the player can travel through the transparent
+first across the 1920×1080 logical scene. Each platform uses the solid upper 1024×224
+area of its source image and renders at 300×66. Its collision surface is a separate
+300×24 rectangle across the top, so the player can travel through the transparent
 space underneath or land on the deck. Source image artifacts are preserved.
 Robot idle/walk/jump sheets and the drone movement sheet are animated by
 `src/game_sprites.cpp`. Facing follows horizontal movement, jumping plays once, and
