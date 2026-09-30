@@ -10,6 +10,59 @@ cmake --build build --target robot_factory_escape
 ./build/robot_factory_escape
 ```
 
+## Multiplayer networking
+
+Build both executables (`cmake --build build --target robot_factory_escape robot_factory_server`).
+Choose one mode for a session and start the coordinator first. Run the game command
+in two or more terminals. All participants must use the same mode as the coordinator.
+
+### Client-server mode
+
+The coordinator receives each player's position and relays it to the other clients.
+It also advances the shared drone.
+
+```sh
+./build/robot_factory_server --mode client-server --bind 'tcp://*' --port 5555
+./build/robot_factory_escape --mode client-server --server-host 127.0.0.1 --server-port 5555
+./build/robot_factory_escape --mode client-server --server-host 127.0.0.1 --server-port 5555
+```
+
+### Peer-to-peer mode
+
+Clients send their robot positions directly to each other. The coordinator assigns
+IDs, shares peer addresses, and advances the shared drone; it does not relay robot
+positions. This is the default network mode for compatibility with existing runs.
+
+```sh
+./build/robot_factory_server --mode peer-to-peer --bind 'tcp://*' --port 5555
+./build/robot_factory_escape --mode peer-to-peer --server-host 127.0.0.1 --server-port 5555 --advertise-host 127.0.0.1
+./build/robot_factory_escape --mode peer-to-peer --server-host 127.0.0.1 --server-port 5555 --advertise-host 127.0.0.1
+```
+
+In either mode, the server assigns distinct IDs and advances the drone at 60 ticks
+per second. Each client sends its robot position once per local simulation tick and
+receives the shared drone state while its local simulation is paused. Closing a
+client removes its remote robot from other clients. Starting the game without
+network options runs an offline game.
+
+For a LAN run, use the server machine's reachable IP for `--server-host` on each
+client. In peer-to-peer mode, set `--advertise-host` to **that client's own reachable
+IP** on each machine. Use `--bind 'tcp://*'` on the server and allow its join port
+(5555 by default) and engine-assigned client control ports through the machines'
+firewalls. Peer-to-peer mode additionally requires direct TCP access between
+clients on engine-assigned peer ports. Those ports are allocated at startup and
+cannot be configured through the game's command line.
+
+`T` pauses or resumes only the local simulation; `1`, `2`, and `3` select 0.5×,
+1×, and 2× local speed. `P` still toggles rendering scale. A paused client stays
+connected and continues displaying incoming robot and drone positions. An
+existing paused peer does not publish a new robot position until it resumes, so
+a newly joined client may initially see no robot for that peer. Winning and
+restarting are local to the client. Remote robots have no local collision body.
+
+The engine uses a system `libzmq` development package when available (`zeromq-devel`
+on Fedora), or builds ZeroMQ 4.3.5 from source during CMake configuration.
+
 The engine's dependency setup may download dependencies during configuration.
 Build output stays in this directory's ignored `build/` folder.
 
@@ -34,8 +87,9 @@ moves between x=500 and x=1600 at 180 logical pixels per second without gravity.
 Its patrol is at y=440, crossing the robot's path on the second and fourth platforms.
 Contact resets the robot position, velocity, and grounded state; the drone keeps
 its patrol progress. The exit uses a cyan frame with orange factory accents;
-touching it turns its status lights green and freezes gameplay. Press R to restart
-at any time: the robot, drone patrol, and exit color reset. P still works after
+touching it turns its status lights green and freezes local gameplay. Press R to restart
+at any time: in offline mode the robot and drone patrol reset; in network mode
+the robot resets while the server drone continues. The exit color resets. P still works after
 winning, and restarting preserves the selected scaling mode.
 Constant scaling can crop this room in a smaller window; proportional fits it.
 The exit is elevated above a five-platform route, so reaching it requires a sequence

@@ -25,6 +25,10 @@ target_compile_options(robot_factory_escape PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic>
 )
 
+add_executable(robot_factory_server src/server_main.cpp)
+target_include_directories(robot_factory_server PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_link_libraries(robot_factory_server PRIVATE engine::engine)
+
 option(GAME_BUILD_TESTS "Build game movement checks" ON)
 if(GAME_BUILD_TESTS)
     enable_testing()
@@ -45,5 +49,9 @@ if(GAME_BUILD_TESTS)
     target_link_libraries(game_sprites_tests PRIVATE engine)
     target_compile_definitions(game_sprites_tests PRIVATE GAME_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets/sprites/")
     add_test(NAME game_sprites COMMAND game_sprites_tests)
+    add_executable(network_state_tests tests/network_state_tests.cpp)
+    target_include_directories(network_state_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+    target_link_libraries(network_state_tests PRIVATE engine)
+    add_test(NAME network_state COMMAND network_state_tests)
     set_tests_properties(game_sprites PROPERTIES ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software")
 endif()
