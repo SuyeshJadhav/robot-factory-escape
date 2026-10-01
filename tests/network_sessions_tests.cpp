@@ -1,4 +1,7 @@
-#include <robot_factory_escape/network_state.hpp>
+#include <robot_factory_escape/gameplay/player_motion.hpp>
+#include <robot_factory_escape/networking/network_state.hpp>
+
+#include <array>
 
 #include <chrono>
 #include <stdexcept>
@@ -47,8 +50,7 @@ void clientServer() {
   serverScene.transform(drone).position = {1100.f, 440.f};
   require(server.replicator().track(drone) == robotNet::droneId, "drone id");
   const auto serverPlatform = addPlatform(serverScene);
-  require(server.replicator().track(serverPlatform) ==
-              robotNet::movingPlatformId,
+  require(server.replicator().track(serverPlatform) == robotNet::movingPlatformId,
           "server platform id");
   server.publishScene(serverScene, 0);
   server.start();
@@ -79,10 +81,8 @@ void clientServer() {
         server.publishScene(serverScene, 1);
         first.applySnapshot(a);
         second.applySnapshot(b);
-        const auto fromA =
-            second.replicator().entityOf(robotNet::robotId(first.id()));
-        const auto fromB =
-            first.replicator().entityOf(robotNet::robotId(second.id()));
+        const auto fromA = second.replicator().entityOf(robotNet::robotId(first.id()));
+        const auto fromB = first.replicator().entityOf(robotNet::robotId(second.id()));
         return fromA && fromB && b.transform(*fromA).position.x == 120.f &&
                a.transform(*fromB).position.x == 240.f &&
                a.transform(aDrone).position.x == 1100.f &&
@@ -91,24 +91,50 @@ void clientServer() {
                b.transform(bPlatform).position.x == 330.f;
       },
       "bidirectional client-server replication");
+  // Both local robots stand on the old server deck before the next snapshot.
+  a.transform(aRobot).position = {360.f, 622.f};
+  b.transform(bRobot).position = {390.f, 622.f};
+  bool aGrounded = true, bGrounded = true;
   serverScene.transform(serverPlatform).position.x = 420.f;
   until(
       [&] {
         server.publishScene(serverScene, 2);
         first.submitScene(a, 2);
         second.submitScene(b, 2);
+        const auto previousA = a.transform(aPlatform).position;
+        const auto previousB = b.transform(bPlatform).position;
         first.applySnapshot(a);
         second.applySnapshot(b);
-        return a.transform(aPlatform).position.x == 420.f &&
-               b.transform(bPlatform).position.x == 420.f &&
-               a.getCollider(aPlatform) && b.getCollider(bPlatform);
+        carryPlayerWithPlatform(a, aRobot, aPlatform, previousA, std::array{aPlatform}, aGrounded);
+        carryPlayerWithPlatform(b, bRobot, bPlatform, previousB, std::array{bPlatform}, bGrounded);
+        return a.transform(aRobot).position.x == 450.f && b.transform(bRobot).position.x == 480.f &&
+               aGrounded && bGrounded && a.transform(aPlatform).position.x == 420.f &&
+               b.transform(bPlatform).position.x == 420.f && a.getCollider(aPlatform) &&
+               b.getCollider(bPlatform);
       },
-      "server-owned moving platform reaches both clients");
-  const auto remoteInB =
-      *second.replicator().entityOf(robotNet::robotId(first.id()));
+      "server-owned moving platform carries both client robots");
+  // Pausing local simulation must not pause reception of world/other-player state.
+  // Keep the first client's tick and robot position fixed; request snapshots only.
+  b.transform(bRobot).position.x = 510.f;
+  serverScene.transform(serverPlatform).position.x = 400.f;
+  until(
+      [&] {
+        first.requestSnapshot(2);
+        second.submitScene(b, 3);
+        server.applyClientStates(serverScene);
+        server.publishScene(serverScene, 3);
+        first.applySnapshot(a);
+        second.applySnapshot(b);
+        const auto remoteB = first.replicator().entityOf(robotNet::robotId(second.id()));
+        return remoteB && a.transform(*remoteB).position.x == 510.f &&
+               a.transform(aPlatform).position.x == 400.f &&
+               b.transform(bPlatform).position.x == 400.f &&
+               a.transform(aRobot).position.x == 450.f;
+      },
+      "paused client receives moving world and unpaused client without moving itself");
+  const auto remoteInB = *second.replicator().entityOf(robotNet::robotId(first.id()));
   robotNet::makeRemoteVisual(b, remoteInB);
-  require(!b.getRigidBody(remoteInB) && !b.getCollider(remoteInB),
-          "remote physics disabled");
+  require(!b.getRigidBody(remoteInB) && !b.getCollider(remoteInB), "remote physics disabled");
   first.leave();
   until(
       [&] {
@@ -130,8 +156,7 @@ void peerToPeer() {
   serverScene.transform(drone).position = {1100.f, 440.f};
   server.replicator().track(drone);
   const auto serverPlatform = addPlatform(serverScene);
-  require(server.replicator().track(serverPlatform) ==
-              robotNet::movingPlatformId,
+  require(server.replicator().track(serverPlatform) == robotNet::movingPlatformId,
           "peer server platform id");
   server.publishScene(serverScene, 0);
   server.start();
@@ -167,10 +192,8 @@ void peerToPeer() {
         second.publishScene(b, 1);
         first.applyUpdates(a);
         second.applyUpdates(b);
-        const auto fromA =
-            second.replicator().entityOf(robotNet::robotId(first.id()));
-        const auto fromB =
-            first.replicator().entityOf(robotNet::robotId(second.id()));
+        const auto fromA = second.replicator().entityOf(robotNet::robotId(first.id()));
+        const auto fromB = first.replicator().entityOf(robotNet::robotId(second.id()));
         return fromA && fromB && b.transform(*fromA).position.x == 120.f &&
                a.transform(*fromB).position.x == 240.f &&
                a.transform(aDrone).position.x == 1100.f &&
@@ -179,19 +202,45 @@ void peerToPeer() {
                b.transform(bPlatform).position.x == 330.f;
       },
       "direct peer replication and late join");
+  // Both local robots stand on the old server deck before the next snapshot.
+  a.transform(aRobot).position = {360.f, 622.f};
+  b.transform(bRobot).position = {390.f, 622.f};
+  bool aGrounded = true, bGrounded = true;
   serverScene.transform(serverPlatform).position.x = 420.f;
   until(
       [&] {
         server.publishScene(serverScene, 2);
         first.publishScene(a, 2);
         second.publishScene(b, 2);
+        const auto previousA = a.transform(aPlatform).position;
+        const auto previousB = b.transform(bPlatform).position;
         first.applyUpdates(a);
         second.applyUpdates(b);
-        return a.transform(aPlatform).position.x == 420.f &&
-               b.transform(bPlatform).position.x == 420.f &&
-               a.getCollider(aPlatform) && b.getCollider(bPlatform);
+        carryPlayerWithPlatform(a, aRobot, aPlatform, previousA, std::array{aPlatform}, aGrounded);
+        carryPlayerWithPlatform(b, bRobot, bPlatform, previousB, std::array{bPlatform}, bGrounded);
+        return a.transform(aRobot).position.x == 450.f && b.transform(bRobot).position.x == 480.f &&
+               aGrounded && bGrounded && a.transform(aPlatform).position.x == 420.f &&
+               b.transform(bPlatform).position.x == 420.f && a.getCollider(aPlatform) &&
+               b.getCollider(bPlatform);
       },
-      "peer clients receive the server-owned moving platform");
+      "server-owned moving platform carries both peer robots");
+  b.transform(bRobot).position.x = 510.f;
+  serverScene.transform(serverPlatform).position.x = 400.f;
+  until(
+      [&] {
+        // Republishing the same local tick also refreshes coordinator snapshots.
+        first.publishScene(a, 2);
+        second.publishScene(b, 3);
+        server.publishScene(serverScene, 3);
+        first.applyUpdates(a);
+        second.applyUpdates(b);
+        const auto remoteB = first.replicator().entityOf(robotNet::robotId(second.id()));
+        return remoteB && a.transform(*remoteB).position.x == 510.f &&
+               a.transform(aPlatform).position.x == 400.f &&
+               b.transform(bPlatform).position.x == 400.f &&
+               a.transform(aRobot).position.x == 450.f;
+      },
+      "paused peer receives moving world and unpaused peer without moving itself");
   first.leave();
   until(
       [&] {

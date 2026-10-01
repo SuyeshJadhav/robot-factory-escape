@@ -20,19 +20,24 @@ int main(int argc, char **argv) {
                           "[--advertise-host HOST] [--initial-speed 0.5|1|2]");
         return 0;
       }
-      if (i + 1 >= argc) throw std::invalid_argument("missing value for " + argument);
+      if (i + 1 >= argc)
+        throw std::invalid_argument("missing value for " + argument);
       const std::string value = argv[++i];
       if (argument == "--mode") {
-        if (value == "peer-to-peer") options.peerToPeer = true;
-        else if (value == "client-server") options.peerToPeer = false;
-        else throw std::invalid_argument("mode must be client-server or peer-to-peer");
+        if (value == "peer-to-peer")
+          options.peerToPeer = true;
+        else if (value == "client-server")
+          options.peerToPeer = false;
+        else
+          throw std::invalid_argument("mode must be client-server or peer-to-peer");
         enabled = true;
       } else if (argument == "--server-host") {
         options.serverHost = value;
         enabled = true;
       } else if (argument == "--server-port") {
         const int port = std::stoi(value);
-        if (port < 1 || port > 65535) throw std::invalid_argument("invalid server port");
+        if (port < 1 || port > 65535)
+          throw std::invalid_argument("invalid server port");
         options.serverPort = static_cast<std::uint16_t>(port);
         enabled = true;
       } else if (argument == "--advertise-host") {
@@ -40,12 +45,13 @@ int main(int argc, char **argv) {
         enabled = true;
       } else if (argument == "--initial-speed") {
         initialSpeed = std::stof(value);
-        if (initialSpeed != 0.5f && initialSpeed != 1.f &&
-            initialSpeed != 2.f)
+        if (initialSpeed != 0.5f && initialSpeed != 1.f && initialSpeed != 2.f)
           throw std::invalid_argument("initial speed must be 0.5, 1, or 2");
-      } else throw std::invalid_argument("unknown option: " + argument);
+      } else
+        throw std::invalid_argument("unknown option: " + argument);
     }
-    if (enabled) network = options;
+    if (enabled)
+      network = options;
     Game game(network, initialSpeed);
     game.run();
   } catch (const std::exception &error) {

@@ -1,6 +1,6 @@
 #include <engine/physics.hpp>
-#include <robot_factory_escape/network_state.hpp>
-#include <robot_factory_escape/moving_platform.hpp>
+#include <robot_factory_escape/gameplay/moving_platform.hpp>
+#include <robot_factory_escape/networking/network_state.hpp>
 
 #include <cassert>
 
@@ -19,8 +19,7 @@ int main() {
   assert(platformScene.transform(platform).position.x == 330.f);
   const auto bytes = robotNet::encode({5, 32, 12});
   const auto state = robotNet::decode(bytes);
-  assert(state && state->clip == 5 && state->frame == 32 &&
-         state->elapsedMilliseconds == 12);
+  assert(state && state->clip == 5 && state->frame == 32 && state->elapsedMilliseconds == 12);
   assert(!robotNet::decode({}));
   auto bad = bytes;
   bad[0] = std::byte{2};
@@ -32,8 +31,7 @@ int main() {
   engine::Scene ownerScene;
   const auto owned = ownerScene.createEntity();
   ownerScene.transform(owned).position = {50.f, 70.f};
-  ownerScene.addShape(owned,
-                      {.size = {96.f, 128.f}, .color = {255, 210, 60, 255}});
+  ownerScene.addShape(owned, {.size = {96.f, 128.f}, .color = {255, 210, 60, 255}});
   ownerScene.addRigidBody(owned, {.velocity = {1.f, 0.f}});
   ownerScene.addCollider(owned, {.size = {80.f, 128.f}});
   engine::networking::sceneReplicator sender(2);
@@ -64,11 +62,11 @@ int main() {
   engine::Scene simScene;
   const auto local = simScene.createEntity();
   int ticks = 0;
-  engine::SimulationThread simulation(
-      std::move(simScene), game, [&](const engine::TickContext &context) {
-        ++ticks;
-        context.scene.transform(local).position.x += 10.f;
-      });
+  engine::SimulationThread simulation(std::move(simScene), game,
+                                      [&](const engine::TickContext &context) {
+                                        ++ticks;
+                                        context.scene.transform(local).position.x += 10.f;
+                                      });
   simulation.advanceFrame();
   ++clock;
   simulation.advanceFrame();
@@ -84,8 +82,7 @@ int main() {
   });
   simulation.advanceFrame();
   const auto frame = simulation.takeRenderFrame();
-  assert(frame && frame->status.paused &&
-         frame->scene.transforms().size() == 2);
+  assert(frame && frame->status.paused && frame->scene.transforms().size() == 2);
   assert(ticks == 1);
   simulation.unpause();
   simulation.setSpeed(2.f);

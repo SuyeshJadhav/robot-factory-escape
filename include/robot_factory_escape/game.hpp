@@ -1,12 +1,12 @@
 #pragma once
 
 #include <engine/engine.hpp>
-#include <robot_factory_escape/drone_patrol.hpp>
-#include <robot_factory_escape/game_progress.hpp>
 #include <robot_factory_escape/game_settings.hpp>
-#include <robot_factory_escape/game_sprites.hpp>
-#include <robot_factory_escape/network_state.hpp>
-#include <robot_factory_escape/moving_platform.hpp>
+#include <robot_factory_escape/gameplay/drone_patrol.hpp>
+#include <robot_factory_escape/gameplay/game_progress.hpp>
+#include <robot_factory_escape/gameplay/moving_platform.hpp>
+#include <robot_factory_escape/graphics/game_sprites.hpp>
+#include <robot_factory_escape/networking/network_state.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -25,19 +25,19 @@ struct NetworkOptions {
 
 class Game {
 public:
-  explicit Game(std::optional<NetworkOptions> network = std::nullopt,
-                float initialSpeed = 1.f);
+  explicit Game(std::optional<NetworkOptions> network = std::nullopt, float initialSpeed = 1.f);
   void run();
 
 private:
   void createLevel();
-  engine::EntityId createBox(glm::vec2 position, glm::vec2 size,
-                             engine::Color color);
+  void restart(engine::Scene &scene);
+  void connectNetwork(const NetworkOptions &network);
+  engine::EntityId createBox(glm::vec2 position, glm::vec2 size, engine::Color color);
   void handleInput(engine::Scene &scene, const engine::KeyboardState &keyboard);
   void update(engine::Scene &scene, float deltaSeconds);
   void drawExit();
   void render();
-  void pumpNetwork(engine::Scene &scene);
+  void pumpNetwork(engine::Scene &scene, bool paused);
   void publishRobot(engine::Scene &scene, std::int64_t tick);
   void setStatusText(engine::Scene &scene, std::string message);
 
@@ -59,6 +59,7 @@ private:
   engine::EntityId statusText_{};
   engine::EntityId networkText_{};
   engine::EntityId timeText_{};
+  engine::EntityId fpsText_{};
   std::vector<engine::EntityId> solids_;
   engine::TextureId backdropTexture_{};
   GameSprites sprites_;
@@ -69,13 +70,11 @@ private:
   MovingPlatformPatrol platformPatrol_;
   GameProgress progress_;
   std::atomic<bool> renderedWon_{false};
-  bool restartKeyWasPressed_ = false;
   std::unique_ptr<engine::networking::sessionClient> clientSession_;
   std::unique_ptr<engine::networking::peerSession> peerSession_;
   engine::ClientId localClientId_ = 0;
   glm::vec2 localSpawn_{120.f, 300.f};
   std::unordered_set<engine::ClientId> remoteIds_;
-  std::chrono::steady_clock::time_point lastPausedPublish_{};
   bool peerToPeer_ = false;
   bool connected_ = true;
 };

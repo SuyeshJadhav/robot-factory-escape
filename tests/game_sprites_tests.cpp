@@ -1,5 +1,5 @@
 #include <iostream>
-#include <robot_factory_escape/game_sprites.hpp>
+#include <robot_factory_escape/graphics/game_sprites.hpp>
 #include <stdexcept>
 
 void require(bool condition, const char *message) {
@@ -27,23 +27,18 @@ int main() {
     require(walk != idle, "Movement did not select walking");
     const auto frame = scene.getSpriteAnimation(robot)->currentFrame;
     sprites.update(scene, robot, true, false, 0.05f);
-    require(scene.getSpriteAnimation(robot)->currentFrame > frame,
-            "Walking restarts each frame");
+    require(scene.getSpriteAnimation(robot)->currentFrame > frame, "Walking restarts each frame");
     scene.getRigidBody(robot)->velocity.x = -300.f;
     sprites.update(scene, robot, true, false, 0.f);
-    require(scene.getSpriteAnimation(robot)->sheet != walk,
-            "Facing did not change");
+    require(scene.getSpriteAnimation(robot)->sheet != walk, "Facing did not change");
     sprites.update(scene, robot, false, false, 0.f);
-    require(!scene.getSpriteAnimation(robot)->loop,
-            "Jump should hold its final frame");
+    require(!scene.getSpriteAnimation(robot)->loop, "Jump should hold its final frame");
     const auto remote = scene.createEntity();
     scene.addShape(remote, {.texture = std::nullopt});
     auto animationBytes = robotNet::encode(sprites.state(scene, robot));
-    require(
-        sprites.applyRemote(scene, remote, *robotNet::decode(animationBytes)),
-        "Remote animation state was not applied");
-    require(scene.getSpriteAnimation(remote)->sheet ==
-                scene.getSpriteAnimation(robot)->sheet,
+    require(sprites.applyRemote(scene, remote, *robotNet::decode(animationBytes)),
+            "Remote animation state was not applied");
+    require(scene.getSpriteAnimation(remote)->sheet == scene.getSpriteAnimation(robot)->sheet,
             "Remote robot used the wrong local sprite sheet");
     require(scene.getSpriteAnimation(remote)->currentFrame ==
                 scene.getSpriteAnimation(robot)->currentFrame,

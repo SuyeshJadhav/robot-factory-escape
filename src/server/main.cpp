@@ -1,10 +1,11 @@
 #include <engine/engine.hpp>
-#include <robot_factory_escape/drone_patrol.hpp>
-#include <robot_factory_escape/network_state.hpp>
-#include <robot_factory_escape/moving_platform.hpp>
+#include <robot_factory_escape/gameplay/drone_patrol.hpp>
+#include <robot_factory_escape/gameplay/level_layout.hpp>
+#include <robot_factory_escape/gameplay/moving_platform.hpp>
+#include <robot_factory_escape/networking/network_state.hpp>
 
-#include <chrono>
 #include <atomic>
+#include <chrono>
 #include <csignal>
 #include <exception>
 #include <stdexcept>
@@ -26,9 +27,8 @@ int main(int argc, char **argv) {
     for (int i = 1; i < argc; ++i) {
       const std::string option = argv[i];
       if (option == "--help") {
-        engine::log::info(
-            "Usage: robot_factory_server [--mode client-server|peer-to-peer] "
-            "[--port PORT] [--bind ADDRESS] [--stats-interval-ms N]");
+        engine::log::info("Usage: robot_factory_server [--mode client-server|peer-to-peer] "
+                          "[--port PORT] [--bind ADDRESS] [--stats-interval-ms N]");
         return 0;
       }
       if (i + 1 >= argc)
@@ -40,8 +40,7 @@ int main(int argc, char **argv) {
         else if (value == "client-server")
           peerToPeer = false;
         else
-          throw std::invalid_argument(
-              "mode must be client-server or peer-to-peer");
+          throw std::invalid_argument("mode must be client-server or peer-to-peer");
       } else if (option == "--port") {
         port = std::stoi(value);
         if (port < 1 || port > 65535)
@@ -52,8 +51,7 @@ int main(int argc, char **argv) {
         statsIntervalMs = std::stoi(value);
         if (statsIntervalMs < 0)
           throw std::invalid_argument("stats interval must not be negative");
-      }
-      else
+      } else
         throw std::invalid_argument("unknown option: " + option);
     }
 
@@ -64,18 +62,17 @@ int main(int argc, char **argv) {
     const auto drone = scene.createEntity();
     DronePatrol patrol;
     patrol.advance(scene, drone, 0.f);
-    scene.addShape(drone, {.size = {130.f, 80.f}, .color = {235, 85, 93, 255}});
-    scene.addCollider(drone, {.size = {130.f, 80.f}});
+    scene.addShape(drone, {.size = levelLayout::droneSize, .color = {235, 85, 93, 255}});
+    scene.addCollider(drone, {.size = levelLayout::droneSize});
     if (server.replicator().track(drone) != robotNet::droneId)
       throw std::runtime_error("unexpected drone network ID");
     const auto movingPlatform = scene.createEntity();
     MovingPlatformPatrol platformPatrol;
     platformPatrol.advance(scene, movingPlatform, 0.f);
     scene.addShape(movingPlatform,
-                   {.size = {300.f, 66.f}, .color = {255, 255, 255, 255}});
-    scene.addCollider(movingPlatform, {.size = {300.f, 24.f}});
-    if (server.replicator().track(movingPlatform) !=
-        robotNet::movingPlatformId)
+                   {.size = levelLayout::platformSize, .color = {255, 255, 255, 255}});
+    scene.addCollider(movingPlatform, {.size = levelLayout::platformColliderSize});
+    if (server.replicator().track(movingPlatform) != robotNet::movingPlatformId)
       throw std::runtime_error("unexpected moving-platform network ID");
     server.publishScene(scene, 0);
     server.start();
@@ -91,10 +88,8 @@ int main(int argc, char **argv) {
           server.publishScene(ctx.scene, ctx.tick);
           for (const auto &event : server.drainRosterEvents()) {
             engine::log::info("Client {} {}; {} connected", event.client.id,
-                              event.change ==
-                                      engine::networking::RosterChange::Joined
-                                  ? "joined"
-                                  : "left",
+                              event.change == engine::networking::RosterChange::Joined ? "joined"
+                                                                                       : "left",
                               server.roster().size());
           }
         });
@@ -102,20 +97,16 @@ int main(int argc, char **argv) {
     std::signal(SIGINT, requestStop);
     std::signal(SIGTERM, requestStop);
     engine::log::info("Headless {} server listening on {} port {}",
-                      peerToPeer ? "peer-to-peer" : "client-server", bind,
-                      server.port());
-    auto nextStats = std::chrono::steady_clock::now() +
-                     std::chrono::milliseconds(statsIntervalMs);
+                      peerToPeer ? "peer-to-peer" : "client-server", bind, server.port());
+    auto nextStats = std::chrono::steady_clock::now() + std::chrono::milliseconds(statsIntervalMs);
     while (!stopping && !simulation.failure()) {
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
       if (statsIntervalMs > 0 && std::chrono::steady_clock::now() >= nextStats) {
         engine::log::info("Shared moving platform x={}", platformX.load());
         for (const auto &client : server.stats())
-          engine::log::info("Client {} updates={} state={} snapshots={}",
-                            client.id, client.updates, client.stateUpdates,
-                            client.snapshotsSent);
-        nextStats = std::chrono::steady_clock::now() +
-                    std::chrono::milliseconds(statsIntervalMs);
+          engine::log::info("Client {} updates={} state={} snapshots={}", client.id, client.updates,
+                            client.stateUpdates, client.snapshotsSent);
+        nextStats = std::chrono::steady_clock::now() + std::chrono::milliseconds(statsIntervalMs);
       }
     }
     simulation.stop();
