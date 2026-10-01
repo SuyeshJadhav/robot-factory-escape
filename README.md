@@ -1,8 +1,22 @@
 # Robot Factory Escape — learning sandbox
 
-A runnable scaffold consuming the engine from the sibling `GEF_engine` repository.
-Artwork is bundled in `assets/sprites/`; no additional game dependencies are needed. Open this directory as a
-CMake project in CLion, or use the commands below from this directory.
+A runnable game consuming the team's `GEF_engine` repository. The verified
+engine revision is [`155b85c`](https://github.com/ShounakDeshmukh/GEF_engine/commit/155b85c4fcea83bd25fe0bb5acc1b3d661953768).
+Artwork is bundled in `assets/sprites/`.
+
+For a fresh checkout, place the engine and game side by side:
+
+```sh
+mkdir milestone2 && cd milestone2
+git clone https://github.com/ShounakDeshmukh/GEF_engine.git
+git -C GEF_engine checkout 155b85c
+git clone https://github.com/SuyeshJadhav/robot-factory-escape.git
+cd robot-factory-escape
+```
+
+If the engine is already elsewhere, pass
+`-DGEF_ENGINE_DIR=/absolute/path/to/GEF_engine` to the CMake configure
+command. Then build and run the game:
 
 ```sh
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
