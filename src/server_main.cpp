@@ -1,10 +1,11 @@
 #include <engine/engine.hpp>
 #include <robot_factory_escape/drone_patrol.hpp>
 #include <robot_factory_escape/network_state.hpp>
+#include <robot_factory_escape/moving_platform.hpp>
 
 #include <chrono>
+#include <atomic>
 #include <csignal>
-#include <cstdint>
 #include <exception>
 #include <stdexcept>
 #include <string>
@@ -13,73 +14,116 @@
 namespace {
 volatile std::sig_atomic_t stopping = 0;
 void requestStop(int) { stopping = 1; }
-}
+} // namespace
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
   try {
     engine::log::init();
-    engine::networking::ServerConfig config;
-    config.relayPlayers = false;
+    bool peerToPeer = false;
+    int port = 5555;
+    int statsIntervalMs = 0;
+    std::string bind = "tcp://*";
     for (int i = 1; i < argc; ++i) {
       const std::string option = argv[i];
       if (option == "--help") {
-        engine::log::info("Usage: robot_factory_server [--mode client-server|peer-to-peer] "
-                          "[--port PORT] [--bind ADDRESS]");
+        engine::log::info(
+            "Usage: robot_factory_server [--mode client-server|peer-to-peer] "
+            "[--port PORT] [--bind ADDRESS] [--stats-interval-ms N]");
         return 0;
       }
-      if (option == "--mode" && i + 1 < argc) {
-        const std::string value = argv[++i];
-        if (value == "client-server") config.relayPlayers = true;
-        else if (value == "peer-to-peer") config.relayPlayers = false;
-        else throw std::invalid_argument("mode must be client-server or peer-to-peer");
-      } else if (option == "--port" && i + 1 < argc) {
-        const int value = std::stoi(argv[++i]);
-        if (value < 1 || value > 65535) throw std::invalid_argument("invalid port");
-        config.joinPort = static_cast<std::uint16_t>(value);
-      } else if (option == "--bind" && i + 1 < argc) {
-        config.bindAddress = argv[++i];
-      } else {
-        throw std::invalid_argument("usage: robot_factory_server [--mode client-server|peer-to-peer] [--port 5555] [--bind tcp://*]");
+      if (i + 1 >= argc)
+        throw std::invalid_argument("missing value for " + option);
+      const std::string value = argv[++i];
+      if (option == "--mode") {
+        if (value == "peer-to-peer")
+          peerToPeer = true;
+        else if (value == "client-server")
+          peerToPeer = false;
+        else
+          throw std::invalid_argument(
+              "mode must be client-server or peer-to-peer");
+      } else if (option == "--port") {
+        port = std::stoi(value);
+        if (port < 1 || port > 65535)
+          throw std::invalid_argument("invalid port");
+      } else if (option == "--bind")
+        bind = value;
+      else if (option == "--stats-interval-ms") {
+        statsIntervalMs = std::stoi(value);
+        if (statsIntervalMs < 0)
+          throw std::invalid_argument("stats interval must not be negative");
       }
+      else
+        throw std::invalid_argument("unknown option: " + option);
     }
-    engine::networking::Server server(config);
-    server.start();
+
+    engine::networking::sessionServer server(bind + ":" + std::to_string(port));
     engine::Timeline realTime;
     engine::Timeline serverTime(realTime, 60);
     engine::Scene scene;
     const auto drone = scene.createEntity();
     DronePatrol patrol;
     patrol.advance(scene, drone, 0.f);
+    scene.addShape(drone, {.size = {130.f, 80.f}, .color = {235, 85, 93, 255}});
+    scene.addCollider(drone, {.size = {130.f, 80.f}});
+    if (server.replicator().track(drone) != robotNet::droneId)
+      throw std::runtime_error("unexpected drone network ID");
+    const auto movingPlatform = scene.createEntity();
+    MovingPlatformPatrol platformPatrol;
+    platformPatrol.advance(scene, movingPlatform, 0.f);
+    scene.addShape(movingPlatform,
+                   {.size = {300.f, 66.f}, .color = {255, 255, 255, 255}});
+    scene.addCollider(movingPlatform, {.size = {300.f, 24.f}});
+    if (server.replicator().track(movingPlatform) !=
+        robotNet::movingPlatformId)
+      throw std::runtime_error("unexpected moving-platform network ID");
+    server.publishScene(scene, 0);
+    server.start();
+    std::atomic<float> platformX{MovingPlatformPatrol::left};
+
     engine::SimulationThread simulation(
-        std::move(scene), serverTime, [&](const engine::TickContext& ctx) {
+        std::move(scene), serverTime, [&](const engine::TickContext &ctx) {
+          if (!peerToPeer)
+            server.applyClientStates(ctx.scene);
           patrol.advance(ctx.scene, drone, ctx.dt);
-          const auto position = ctx.scene.transform(drone).position;
-          server.publishWorld(robotNet::encode({position.x, position.y}), ctx.tick);
-          if (ctx.tick % 30 == 0)
-            engine::log::info("Server drone tick {} position ({}, {}) at {} ms",
-                ctx.tick, position.x, position.y,
-                std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::system_clock::now().time_since_epoch()).count());
-          for (const auto& event : server.drain()) {
-            if (event.kind == engine::networking::ClientEvent::Kind::Joined)
-              engine::log::info("Client {} joined; {} connected", event.client, server.connectedClients());
-            else if (event.kind == engine::networking::ClientEvent::Kind::Left)
-              engine::log::info("Client {} left; {} connected", event.client, server.connectedClients());
+          platformPatrol.advance(ctx.scene, movingPlatform, ctx.dt);
+          platformX.store(ctx.scene.transform(movingPlatform).position.x);
+          server.publishScene(ctx.scene, ctx.tick);
+          for (const auto &event : server.drainRosterEvents()) {
+            engine::log::info("Client {} {}; {} connected", event.client.id,
+                              event.change ==
+                                      engine::networking::RosterChange::Joined
+                                  ? "joined"
+                                  : "left",
+                              server.roster().size());
           }
         });
     simulation.start();
     std::signal(SIGINT, requestStop);
     std::signal(SIGTERM, requestStop);
-    engine::log::info("Headless {} coordinator listening on {} port {}",
-                      config.relayPlayers ? "client-server" : "peer-to-peer",
-                      config.bindAddress, server.port());
-    while (!stopping && !simulation.failure())
+    engine::log::info("Headless {} server listening on {} port {}",
+                      peerToPeer ? "peer-to-peer" : "client-server", bind,
+                      server.port());
+    auto nextStats = std::chrono::steady_clock::now() +
+                     std::chrono::milliseconds(statsIntervalMs);
+    while (!stopping && !simulation.failure()) {
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      if (statsIntervalMs > 0 && std::chrono::steady_clock::now() >= nextStats) {
+        engine::log::info("Shared moving platform x={}", platformX.load());
+        for (const auto &client : server.stats())
+          engine::log::info("Client {} updates={} state={} snapshots={}",
+                            client.id, client.updates, client.stateUpdates,
+                            client.snapshotsSent);
+        nextStats = std::chrono::steady_clock::now() +
+                    std::chrono::milliseconds(statsIntervalMs);
+      }
+    }
     simulation.stop();
     server.stop();
-    if (const auto error = simulation.failure()) std::rethrow_exception(error);
-  } catch (const std::exception& error) {
-    engine::log::error("Coordinator: {}", error.what());
+    if (const auto error = simulation.failure())
+      std::rethrow_exception(error);
+  } catch (const std::exception &error) {
+    engine::log::error("Server: {}", error.what());
     return 1;
   }
   return 0;

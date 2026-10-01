@@ -1,48 +1,37 @@
-# Section 5 peer networking verification
+# Multiplayer verification
 
-## Result
+The game uses the updated engine's `sessionServer`, `sessionClient`,
+`peerSession`, and `sceneReplicator`. This replaced the earlier custom position
+packet API, which no longer builds against the current engine.
 
-The hybrid model is implemented. A dedicated headless coordinator assigns peer
-IDs and endpoints and supplies the shared drone position. Every game process
-publishes its own player position to the other processes over a direct ZeroMQ
-PUB/SUB connection. The coordinator handles registration and world requests; it
-has no code path that accepts or forwards a `PlayerState` packet.
+## Automated checks
 
-| Assignment behavior | Evidence | Result |
-| --- | --- | --- |
-| Multiple independent client processes | Launched concurrent `robot_factory_escape` instances against `robot_factory_server`; assigned distinct IDs (e.g. 1 and 2) | Pass |
-| Direct peer player data | Each client's log reported receiving positions directly from the other peer via ZeroMQ PUB/SUB | Pass |
-| Late joining | Newly joined clients connect to existing peers and exchange state updates | Pass |
-| Departure | Remaining clients log remote robot entity removal upon peer disconnection / departure | Pass |
-| Shared moving object | Headless coordinator advances and publishes 60 Hz drone position & tick; clients sync positions within < 250 ms latency | Pass |
-| Simulation threading & rendering | Physics & state run on `SimulationThread`, rendering on main thread, sockets on network workers | Pass |
-| Timeline pause & speed scaling | Keyboard `T` pauses local simulation without dropping network or remote updates; `1/2/3` scales speed (0.5×, 1×, 2×); `P` toggles scaling | Pass |
+From the game directory:
 
-All 118 engine CTest test cases passed (100%), including `network_three_processes`.
-All 5 game CTest test cases passed (100%), including `network_state`.
+```sh
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
 
-## Reproduce
+The game suite currently has six tests. `network_state` checks network IDs,
+versioned animation metadata, remote entity physics exclusion, and local
+pause/speed behavior using a controlled clock. `network_sessions` starts a
+real server and two clients on localhost in both modes, checks bidirectional
+robot replication, a server-owned moving platform reaching both clients,
+a late-joining peer receiving a frozen robot, and robot
+removal after departure. The remaining tests cover movement, drone patrol,
+progress, and sprites.
 
-1. Build the engine and game:
-   ```bash
-   cmake --build build
-   ```
-2. Run test suites:
-   ```bash
-   ctest --test-dir build --output-on-failure
-   ```
-3. Run coordinator server:
-   ```bash
-   ./build/robot_factory_server --port 5678 --bind tcp://*
-   ```
-4. Run multiple game clients from separate terminals:
-   ```bash
-   ./build/robot_factory_escape --server-host 127.0.0.1 --server-port 5678 --advertise-host 127.0.0.1
-   ```
-   - Control movement with `A`/`D` and `Space`.
-   - Observe remote player robots in real time.
-   - Press `T` to pause local simulation (remote players and drone continue updating; heartbeat remains alive).
-   - Press `1`, `2`, `3` to scale simulation speed to 0.5×, 1×, or 2×.
-   - Press `P` to toggle window scaling between proportional and constant.
-   - Disconnecting one client removes its robot on other clients cleanly.
+## Manual demonstration
 
+Use the commands in the README to start a server and two graphical clients.
+Check that each client has a different ID, sees the other animated robot,
+shared drone, and cyan-outlined moving platform, and that pressing `T` or `1/2/3` in one window affects only that
+window's robot. Closing one window should remove its robot from the other.
+Repeat in peer-to-peer mode, including joining a second client while the
+first is paused.
+
+A headless SDL smoke run with two client processes confirmed that both could
+join the server and start their simulation threads. The automated session
+suite is the repeatable replication check; a human should still verify visual
+sprite placement and control feel in a real window.
