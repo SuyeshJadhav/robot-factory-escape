@@ -10,66 +10,83 @@ cmake --build build --target robot_factory_escape
 ./build/robot_factory_escape
 ```
 
-## Multiplayer networking
+## Multiplayer networking and rubric demonstration
 
-Build both executables (`cmake --build build --target robot_factory_escape robot_factory_server`).
-Choose one mode for a session and start the coordinator first. Run the game command
-in two or more terminals. All participants must use the same mode as the coordinator.
-
-### Client-server mode
-
-The coordinator receives each player's position and relays it to the other clients.
-It also advances the shared drone.
+Build the game, headless server, and tests from this directory:
 
 ```sh
-./build/robot_factory_server --mode client-server --bind 'tcp://*' --port 5555
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+Run one server and three clients in four terminals. Client-server is the default
+network mode; these commands also work across machines when `--server-host` is
+set to the server's reachable address.
+
+```sh
+./build/robot_factory_server --mode client-server --bind 'tcp://*' --port 5555 --stats-interval-ms 3000
+./build/robot_factory_escape --mode client-server --server-host 127.0.0.1 --server-port 5555
 ./build/robot_factory_escape --mode client-server --server-host 127.0.0.1 --server-port 5555
 ./build/robot_factory_escape --mode client-server --server-host 127.0.0.1 --server-port 5555
 ```
 
-### Peer-to-peer mode
+The server assigns distinct player IDs, relays each client's robot through its
+scene snapshot, and advances the shared drone and first platform at 60 Hz. Each window shows its
+own animated robot, other players' robots with gold outlines, the server's drone,
+and the cyan-outlined moving platform. Closing a client removes its robot from the other
+window. All robots spawn and restart at the same position, so they may overlap
+until a player moves. The HUD shows the mode, ID, connection status, pause, and speed.
+The first platform travels between x=330 and x=450 at 60 logical pixels per
+second. It has the same collider in every client, while its transform comes
+from the server's timeline. A client pause stops its robot but does not stop
+the shared platform or drone.
+Start the third client after the first two are running to check late joins.
+The optional server statistics print cumulative per-client request, state, and
+snapshot counts every three seconds.
 
-Clients send their robot positions directly to each other. The coordinator assigns
-IDs, shares peer addresses, and advances the shared drone; it does not relay robot
-positions. This is the default network mode for compatibility with existing runs.
+To compare asynchronous client rates without coordinating key presses, start
+one client with `--initial-speed 0.5` and another with `--initial-speed 2`.
+Subtract two consecutive `updates` counts in the server log: steady-state
+rates should be about 30 and 120 requests per second, respectively. The
+interactive `1`, `2`, and `3` keys change the same local timeline afterward.
+
+The alternative peer-to-peer mode keeps the server as a roster and shared-world
+coordinator while clients exchange their robots directly:
 
 ```sh
-./build/robot_factory_server --mode peer-to-peer --bind 'tcp://*' --port 5555
+./build/robot_factory_server --mode peer-to-peer --bind 'tcp://*' --port 5555 --stats-interval-ms 3000
+./build/robot_factory_escape --mode peer-to-peer --server-host 127.0.0.1 --server-port 5555 --advertise-host 127.0.0.1
 ./build/robot_factory_escape --mode peer-to-peer --server-host 127.0.0.1 --server-port 5555 --advertise-host 127.0.0.1
 ./build/robot_factory_escape --mode peer-to-peer --server-host 127.0.0.1 --server-port 5555 --advertise-host 127.0.0.1
 ```
 
-In either mode, the server assigns distinct IDs and advances the drone at 60 ticks
-per second. Each client sends its robot position once per local simulation tick and
-receives the shared drone state while its local simulation is paused. Closing a
-client removes its remote robot from other clients. Starting the game without
-network options runs an offline game.
+For a LAN peer session, `--advertise-host` must be that client's reachable IP.
+Allow the server join port and engine-assigned per-client control ports through
+firewalls; peer mode also needs access to engine-assigned direct peer ports.
 
-For a LAN run, use the server machine's reachable IP for `--server-host` on each
-client. In peer-to-peer mode, set `--advertise-host` to **that client's own reachable
-IP** on each machine. Use `--bind 'tcp://*'` on the server and allow its join port
-(5555 by default) and engine-assigned client control ports through the machines'
-firewalls. Peer-to-peer mode additionally requires direct TCP access between
-clients on engine-assigned peer ports. Those ports are allocated at startup and
-cannot be configured through the game's command line.
+`T` pauses or resumes only the local simulation; `1`, `2`, and `3` set 0.5×,
+1×, and 2× local speed. Other players, the server drone, and the moving platform continue while
+one player is paused. A paused peer periodically republishes its frozen robot
+so a late joiner can see it. `P` toggles rendering scale. Without network
+options, the game runs offline. Winning and `R` restart are local to each
+player.
 
-`T` pauses or resumes only the local simulation; `1`, `2`, and `3` select 0.5×,
-1×, and 2× local speed. `P` still toggles rendering scale. A paused client stays
-connected and continues displaying incoming robot and drone positions. An
-existing paused peer does not publish a new robot position until it resumes, so
-a newly joined client may initially see no robot for that peer. Winning and
-restarting are local to the client. Remote robots have no local collision body.
+| Rubric item | Implementation | Verification |
+| --- | --- | --- |
+| 4.1 Game server | `robot_factory_server` uses `sessionServer` and a server timeline | Launch commands above; session test |
+| 4.2 Two clients | The server joins each client with a distinct ID and update worker | `network_sessions` test and two windows |
+| 4.3 Entity replication | Client-owned robot `NetId`s and server-owned drone/platform `NetId`s use `sceneReplicator`; peer mode uses `peerSession` | `network_state` and `network_sessions` tests |
+| 5.1/5.2 Timelines | Local game timeline supports pause, 0.5×, 1×, 2×; server has its own 60 Hz timeline | `network_state` clock test and HUD |
+| 6.3 Concurrent processing | SDL render main thread, `SimulationThread` for gameplay, engine network workers for transport | Running two-client demo and session test |
 
-The engine uses a system `libzmq` development package when available (`zeromq-devel`
-on Fedora), or builds ZeroMQ 4.3.5 from source during CMake configuration.
-
-The engine's dependency setup may download dependencies during configuration.
-Build output stays in this directory's ignored `build/` folder.
+The engine uses system ZeroMQ development packages when present, or builds
+ZeroMQ from source. CMake may download dependencies on first configuration.
 
 ## What works
 
 - Window, event loop, frame timing, and rectangle rendering.
-- Cyberpunk backdrop and five textured raised platforms with an animated cyborg,
+- Cyberpunk backdrop and five textured raised platforms (the first moves) with an animated cyborg,
   drone, and code-drawn factory exit. The floor remains a basic shape.
 - Matching shape/collider sizes. Only the robot has a rigid body.
 - A/D moves the robot at 300 logical pixels per second. Releasing both keys stops

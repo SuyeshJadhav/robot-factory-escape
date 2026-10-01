@@ -11,12 +11,13 @@ int main(int argc, char **argv) {
     std::optional<NetworkOptions> network;
     NetworkOptions options;
     bool enabled = false;
+    float initialSpeed = 1.f;
     for (int i = 1; i < argc; ++i) {
       const std::string argument = argv[i];
       if (argument == "--help") {
         engine::log::info("Usage: robot_factory_escape [--mode client-server|peer-to-peer] "
                           "[--server-host HOST] [--server-port PORT] "
-                          "[--advertise-host HOST]");
+                          "[--advertise-host HOST] [--initial-speed 0.5|1|2]");
         return 0;
       }
       if (i + 1 >= argc) throw std::invalid_argument("missing value for " + argument);
@@ -37,10 +38,15 @@ int main(int argc, char **argv) {
       } else if (argument == "--advertise-host") {
         options.advertisedHost = value;
         enabled = true;
+      } else if (argument == "--initial-speed") {
+        initialSpeed = std::stof(value);
+        if (initialSpeed != 0.5f && initialSpeed != 1.f &&
+            initialSpeed != 2.f)
+          throw std::invalid_argument("initial speed must be 0.5, 1, or 2");
       } else throw std::invalid_argument("unknown option: " + argument);
     }
     if (enabled) network = options;
-    Game game(network);
+    Game game(network, initialSpeed);
     game.run();
   } catch (const std::exception &error) {
     engine::log::error("Robot Factory Escape: {}", error.what());
