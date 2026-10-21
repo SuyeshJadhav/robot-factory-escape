@@ -6,6 +6,9 @@ packet API, which no longer builds against the current engine.
 
 ## Current networking-refactor milestone
 
+See the [milestone task and change record](networking-refactor-milestone.md)
+for the assignment/status/evidence table and the changes made for this milestone.
+
 Validate this game against GEF_engine revision
 `0ec1cba862c91d2ed19bf2cf9b890cd51a5dede3` (engine 0.3.0).
 The older engine checkout shown elsewhere in the README is not this milestone's
@@ -148,6 +151,41 @@ Investigate it separately before graphical sign-off; this test/document-only
 change does not repair rendering.
 
 **Outcome: automated compatibility verified; full milestone verification incomplete.**
+
+### Follow-up independent audit
+
+Three independent read-only reviews found no blocker to the supplied course
+requirement, "Update your game to include the new networking refactor." They
+checked production integration, regression/CMake coverage, and demo boundaries.
+The game already consumes the session APIs in production; the contribution adds
+focused compatibility coverage and evidence rather than another transport layer.
+A fresh disconnected Debug configure/build passed, each focused networking test
+passed five repetitions, and the full suite passed 8/8. This establishes the
+stated adoption task, not every graphical gate in the earlier local checklist.
+
+The yellow backing needs a narrower interpretation than the original visual
+record: `src/graphics/game_render.cpp` intentionally draws a filled gold marker
+behind animated remote players. A rectangle can therefore coexist with working
+remote sprite animation; its presence alone does not prove replication failure.
+The original observation remains historical evidence, not an established
+networking-regression diagnosis. Confirm the artwork with separated robots in
+both modes before complete graphical sign-off.
+
+Human checks subsequently reported working speed controls (including slower
+jump timing), mid-jump pause in both modes, and paused late join. Restarting
+while paused preserves pause and leaves the robot at spawn until T resumes;
+that is the intended contract. Independent finishes and local restarts remain
+the selected demo behavior; no shared-winner system was added. Remaining manual
+checklist items are not inferred to pass from a general report that things work.
+
+The audit also identified an existing test-harness limit: `network_state` puts
+required `track`/`apply` operations inside `assert`, so it is not safe evidence
+for builds defining `NDEBUG`. These passing results are Debug-only. The new
+`network_refactor` uses runtime checks. The truncation fixture tests selected
+existing state, not complete scene atomicity or arbitrary malformed packets.
+Shared drone animation can also freeze after local victory while its received
+position keeps updating; that presentation limitation is not a refactor-adoption
+blocker. These findings were not silently expanded into unrelated repairs.
 
 ## Automated checks
 
