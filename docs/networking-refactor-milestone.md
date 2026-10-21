@@ -106,3 +106,47 @@ build cache or a different engine revision reproduces these results.
 Debug consumer/integration evidence. Optional presentation improvements and
 remaining full graphical checks do not imply another networking implementation
 is needed for this assignment.
+
+
+## Complete individual-game Milestone 3 integration — 2026-10-21
+
+This heading names the intended Part 2 scope, not a claim that every acceptance
+gate has passed. The earlier sections record the narrower networking-refactor
+adoption at their own revisions; those historical passes are not re-used as proof
+for the new world.
+
+Game implementation: `6d6bf6dfe8a12ee4e365cbebe81a714622533e79`. Engine:
+`0ec1cba862c91d2ed19bf2cf9b890cd51a5dede3`. The following documentation commit
+changes no tested source.
+
+| Requirement | Current implementation | Evidence |
+|---|---|---|
+| Keyboard movement/jump | Existing `Game::handleInput`/`player_motion`; new shared tick | Headless movement/carry/gameplay tests PASS; real keyboard/window demonstration BLOCKED. |
+| Distinct static platforms | Eight static platform specs in `src/gameplay/factory_world.cpp` | `factory_world` PASS. |
+| Two motion patterns | `MovingPlatformPatrol` and `factory::Orbit` attached to scene entities | `factory_motion` and offline/client ownership assertions PASS. |
+| Multiple hidden spawns | `SpawnPoint` entities and explicit local `RespawnTarget` | `factory_world`/`respawn` PASS. |
+| Collision death zones | Hidden pit/perimeter collider entities, `inDeathZone` and `respawnPlayer` | `respawn`/`factory_gameplay` PASS; pit traversal uses actual physics. |
+| Camera alternative | `graphics/camera.hpp` and offsets in `game_render.cpp` | `camera` PASS; visual HUD/door/marker/scale observations BLOCKED. |
+| Endpoint object model | One renderer-independent world factory on server and clients; fixed network IDs | Binary/JSON `factory_replication` PASS; live four-client scenarios compiled but BLOCKED. |
+
+No new ECS, transport, event system, configuration framework, or engine change.
+The scene owns simple movement/spawn/death components; `Game` retains input/UI and
+session coordination. Clients advance only their robot; offline ticks/server own
+world motion. Camera rendering never rewrites simulation coordinates.
+
+Replacement movement/restart tests passed before the old callers were removed.
+The two legacy drone files remain untouched on disk (no deletion approval), but
+are unused by production and no longer registered as a test target.
+
+Actual acceptance: fresh Debug configure/build PASS, 12/12 non-socket tests PASS,
+14 target names reconciled, both CLI help paths PASS. The new network test needed
+two C++ dependent-template qualifiers to compile; it has not been executed.
+Current socket tests, repeated full-suite runs, and all graphical demonstrations
+are BLOCKED by approval boundaries. No latency, LAN, arbitrary-connection capacity,
+full assignment completion, or independent final-review approval is claimed here.
+
+Still required for submission: graphical and four-client evidence; sprite/font
+attribution (see README); exact-revision source export and fresh exported-source
+build/asset checks; team-engine delivery; applicable performance experiments; the
+individual paper and appendix. No upload/submission occurred. Local graph artifacts
+were not refreshed and remain stale.

@@ -187,7 +187,7 @@ Shared drone animation can also freeze after local victory while its received
 position keeps updating; that presentation limitation is not a refactor-adoption
 blocker. These findings were not silently expanded into unrelated repairs.
 
-## Automated checks
+## Automated checks (historical networking-only baseline)
 
 From the game directory:
 
@@ -196,7 +196,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-The game suite currently has eight tests. `network_state` checks network IDs,
+That networking-only baseline had eight tests. `network_state` checks network IDs,
 versioned animation metadata, remote entity physics exclusion, and local
 pause/speed behavior using a controlled clock. `network_sessions` starts a
 real server and two clients on localhost in both modes, checks bidirectional
@@ -235,7 +235,7 @@ sprite placement and control feel in a real window.
 5. Pause while riding: the robot stays frozen while the networked platform moves.
    Resume: there is no accumulated platform jump. If the deck moved out from
    underneath, the robot falls and cannot jump in midair.
-6. Press R while paused. The robot returns to the common spawn immediately;
+6. Press R while paused. The robot returns to its assigned spawn immediately;
    the selected pause and speed remain in effect. T resumes gameplay.
 
 ## Pause smoothness
@@ -250,3 +250,100 @@ peers republish their unchanged robot while requesting the shared world.
 The FPS counter measures presentation frequency, independently of game time.
 A low counter indicates rendering or machine load; a high counter with stepping
 objects indicates sparse network updates. These are different measurements.
+
+
+## Individual-game integration verification — 2026-10-21
+
+Tested game source: `6d6bf6dfe8a12ee4e365cbebe81a714622533e79`; engine:
+`0ec1cba862c91d2ed19bf2cf9b890cd51a5dede3`. Documentation is recorded afterward.
+The previous sections are historical evidence for the earlier networking-only
+revision, not acceptance of this larger world.
+
+| Check actually performed | Result |
+|---|---|
+| Disconnected Debug configure/build, client + server + test binaries | PASS, using the nine existing dependency-source overrides below. No downloads or engine changes. |
+| `ctest --test-dir build/milestone3 -E '^(network_sessions\|factory_network_sessions)$' --no-tests=error --output-on-failure` | PASS: 12/12 non-socket tests. Sprite tests use the registered dummy SDL driver. |
+| `ctest --test-dir build/milestone3 --show-only=json-v1` | PASS: 14 distinct names reconciled against `tests/CMakeLists.txt` and the plan. |
+| `build/milestone3/robot_factory_server --help` and `build/milestone3/robot_factory_escape --help` | PASS: both exit 0 before creating listeners or game windows. |
+| `network_sessions`, `factory_network_sessions`, repeated socket checks and complete suite | BLOCKED: no listener authorization in this implementation run. Both targets compile; no runtime pass is claimed. |
+| Offline full route, controls, hidden objects, HUD/door/camera/scaling | BLOCKED: no game-window launch authorization. Headless logic tests do not certify these observations. |
+| Four simultaneous graphical clients, each driving a unique robot, in both modes | BLOCKED: no listener/window authorization. Must observe real keyboard movement/jump and remote rendering, plus pause, late join, death, finish/restart and normal disconnect. |
+| Exact-revision source export, fresh exported-source build and relocated assets | PENDING: not performed. |
+| Asset attribution | BLOCKED pending original sprite/font provenance and license evidence; see README inventory. |
+
+Registered targets: `player_motion`, `moving_platform`, `game_progress`,
+`game_sprites`, `network_state`, `network_refactor`, `network_sessions`,
+`factory_world`, `factory_motion`, `respawn`, `factory_gameplay`, `camera`,
+`factory_replication`, `factory_network_sessions`.
+
+`factory_gameplay` tests positive-duration offline carry/mover advancement,
+client non-advancement of shared objects, actual collision respawn, restart/re-win,
+and pit traversal. `factory_replication` covers Binary and JSON without sockets,
+including differing local IDs, hidden-component preservation and departed-owner
+cleanup. `factory_network_sessions` assigns positions directly; even a future
+pass will not measure input-to-screen latency or replace the keyboard demonstration.
+
+The initial new API tests failed before implementation because their header/API or
+motion definitions were absent; these are API REDs, not runtime defect claims.
+The four-client test initially failed compilation on two missing dependent-template
+qualifiers; both were fixed and the binary now builds. Its behavior remains unrun.
+A baseline third-party SDL3_image build emitted a `strstr` macro-redefinition
+warning; no engine/dependency edits were made to suppress it.
+
+### Reproduce the authorized non-socket checks
+
+Run from the game root with the pinned engine and already-populated sources.
+A missing dependency, including SDL_ttf vendored dependencies, is a blocker, not
+permission to download. This is Bash because the source overrides use an array.
+
+```bash
+export RFE_BUILD="$PWD/build/milestone3"
+export RFE_CACHE="$PWD/build/_deps"
+(
+  set -e
+  test "$(git -C ../GEF_engine rev-parse HEAD)" = 0ec1cba862c91d2ed19bf2cf9b890cd51a5dede3
+  args=()
+  for dep in sdl3 sdl3_image sdl3_ttf glm fmt spdlog nlohmann_json cppzmq libzmq; do
+    test -f "$RFE_CACHE/$dep-src/CMakeLists.txt"
+    args+=("-DFETCHCONTENT_SOURCE_DIR_${dep^^}=$RFE_CACHE/$dep-src")
+  done
+  cmake -S . -B "$RFE_BUILD" -G Ninja \
+    -DCMAKE_BUILD_TYPE=Debug -DGEF_ENGINE_DIR="$PWD/../GEF_engine" \
+    -DFETCHCONTENT_FULLY_DISCONNECTED=ON \
+    -DENGINE_BUILD_TESTS=OFF -DENGINE_BUILD_EXAMPLES=OFF \
+    -DENGINE_BUILD_BENCH=OFF -DGAME_BUILD_TESTS=ON "${args[@]}"
+  cmake --build "$RFE_BUILD" --parallel 3
+  ctest --test-dir "$RFE_BUILD" -E '^(network_sessions|factory_network_sessions)$' \
+    --no-tests=error --output-on-failure
+  "$RFE_BUILD/robot_factory_server" --help
+  "$RFE_BUILD/robot_factory_escape" --help
+)
+```
+
+### Remaining acceptance gates
+
+Only after explicit temporary-listener permission, run both socket targets five
+times and then the full suite. The authorization variable acknowledges permission;
+it does not restrict engine `tcp://*:0` bindings.
+
+```bash
+test "${RFE_NETWORK_TESTS_AUTHORIZED:-}" = 1 &&
+ctest --test-dir "$RFE_BUILD" -R '^(network_sessions|factory_network_sessions)$' \
+  --repeat until-fail:5 --no-tests=error --output-on-failure &&
+ctest --test-dir "$RFE_BUILD" --no-tests=error --output-on-failure
+```
+
+After graphical approval, exercise the entire raised route, pit/perimeter deaths,
+platform carry/detachment, camera/HUD and P scaling, pause/speed, win/R and paused R.
+For each network mode, use four windows and real keyboard input in **each** window;
+confirm every other client renders that robot, shared movers continue, cameras
+remain local, a fourth client can join while another is paused, and normal closing
+removes only that robot. Record observations individually; unconfirmed input
+injection is not evidence of correct keyboard behavior. No <100 ms result is claimed.
+
+Legacy `drone_patrol.hpp` and its test file are retained unchanged pending deletion
+approval; active callers and the old CTest registration are gone. The graph is
+stale because refresh was not authorized. Team-engine submission, applicable
+benchmark experiments, the individual paper/appendix, attribution, packaging and
+actual submission remain separate obligations. **Full milestone acceptance is
+incomplete; the authorized implementation and non-socket verification are recorded.**
