@@ -1,5 +1,5 @@
-#include <robot_factory_escape/gameplay/respawn.hpp>
 #include <robot_factory_escape/gameplay/player_motion.hpp>
+#include <robot_factory_escape/gameplay/respawn.hpp>
 #include <stdexcept>
 
 namespace factory {
@@ -7,7 +7,8 @@ void assignSpawn(engine::Scene &scene, const World &world, engine::EntityId robo
                  engine::ClientId client) {
   const std::size_t slot = client == 0 ? 0 : (client - 1) % world.spawns.size();
   const auto spawn = world.spawns.at(slot);
-  if (!scene.has<SpawnPoint>(spawn)) throw std::logic_error("invalid spawn assignment");
+  if (!scene.has<SpawnPoint>(spawn))
+    throw std::logic_error("invalid spawn assignment");
   scene.add<RespawnTarget>(robot, {spawn});
 }
 void respawnPlayer(engine::Scene &scene, engine::EntityId robot, bool &grounded) {
@@ -20,7 +21,8 @@ void respawnPlayer(engine::Scene &scene, engine::EntityId robot, bool &grounded)
 bool inDeathZone(engine::Scene &scene, const engine::PhysicsSystem &physics,
                  engine::EntityId robot) {
   for (const auto &[zone, tag] : scene.all<DeathZone>())
-    if (physics.isCollision(scene,robot,zone)) return true;
+    if (physics.isCollision(scene, robot, zone))
+      return true;
   return false;
 }
-}
+} // namespace factory
