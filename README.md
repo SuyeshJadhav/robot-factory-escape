@@ -249,9 +249,6 @@ separate from the verified local demo.
 robot-factory-escape/
 ├── assets/sprites/                       # Background, platforms, robot, drone
 ├── build/                                # Generated build; not source
-├── docs/
-│   ├── multiplayer-verification.md        # Commands, evidence, manual checks
-│   └── networking-refactor-milestone.md   # Milestone 3 change/status record
 ├── include/robot_factory_escape/
 │   ├── game.hpp
 │   ├── game_settings.hpp
@@ -340,9 +337,7 @@ replacement movement/reset coverage lives in the factory tests. Their deletion i
 pending cleanup, not a second active gameplay path.
 
 This does not complete the team engine submission, applicable CSC 581 experiments,
-the individual paper/appendix, or submission packaging. See the dated records in
-[verification](docs/multiplayer-verification.md) and
-[the milestone record](docs/networking-refactor-milestone.md).
+the individual paper/appendix, or submission packaging.
 
 ### Milestone 3: Updated Networking Refactor (historical scope)
 
@@ -358,7 +353,6 @@ current engine revision. Complete graphical sign-off remains a separate limit.
 | Test registration | `tests/CMakeLists.txt` adds the compatibility target to the existing helper; eight tests are registered. |
 | Repeatability and evidence | Disconnected Debug configure/build passed; each of the three focused networking tests passed five repetitions; the full suite passed 8/8 and was rerun before integration into main. |
 | Independent review | Three read-only reviewers checked production integration, test/CMake validity and assignment/demo boundaries; no blocker to the stated refactor-adoption task was found. |
-| Change record | [Milestone 3 record](docs/networking-refactor-milestone.md) documents the exact contribution and qualifications; [verification guide](docs/multiplayer-verification.md) records commands and observations. |
 
 The milestone increment from `ea13bf2` added the compatibility test, its CMake
 registration, and verification/change records. It did **not** add interpolation,
@@ -417,9 +411,7 @@ CTest is not exercising stale executables.
 - **LAN, public-network, mixed-version or cross-architecture interoperability:**
   these are not established by localhost checks.
 
-See [the verification guide](docs/multiplayer-verification.md) for the detailed
-manual checklist and historical observations, and [the Milestone 3 record](docs/networking-refactor-milestone.md)
-for the assignment-to-code/evidence mapping. Current non-socket compatibility
+Current non-socket compatibility
 checks pass; older session results do not certify the changed world or every
 graphical/deployment scenario.
 
