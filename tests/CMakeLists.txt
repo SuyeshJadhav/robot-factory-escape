@@ -13,6 +13,7 @@ add_game_test(network_state)
 add_game_test(network_refactor)
 add_game_test(network_sessions)
 add_game_test(factory_world)
+add_game_test(factory_motion)
 
 target_compile_definitions(game_sprites_tests PRIVATE
     GAME_ASSET_DIR="${PROJECT_SOURCE_DIR}/assets/sprites/"

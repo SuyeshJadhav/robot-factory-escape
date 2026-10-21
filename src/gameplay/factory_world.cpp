@@ -1,6 +1,8 @@
 #include <robot_factory_escape/gameplay/factory_world.hpp>
 #include <robot_factory_escape/gameplay/level_layout.hpp>
 #include <algorithm>
+#include <cmath>
+#include <numbers>
 
 namespace factory {
 namespace {
@@ -64,5 +66,25 @@ engine::EntityId createPlayer(engine::Scene &scene, const World &world) {
   scene.addRigidBody(id);
   scene.add<RespawnTarget>(id, {world.spawns[0]});
   return id;
+}
+
+void advanceWorld(engine::Scene &scene, float dt) {
+  const float elapsed = std::max(dt, 0.f);
+  scene.each<MovingPlatformPatrol>([&](engine::EntityId id, MovingPlatformPatrol &motion) {
+    motion.advance(scene, id, elapsed);
+  });
+  scene.each<Orbit>([&](engine::EntityId id, Orbit &motion) {
+    motion.angle = std::fmod(motion.angle + elapsed * motion.radiansPerSecond,
+                             2.f * std::numbers::pi_v<float>);
+    scene.transform(id).position = motion.center +
+        motion.radius * glm::vec2{std::cos(motion.angle), std::sin(motion.angle)};
+  });
+}
+void resetWorld(engine::Scene &scene) {
+  scene.each<MovingPlatformPatrol>([](engine::EntityId, MovingPlatformPatrol &motion) {
+    motion.distance = 0.f;
+  });
+  scene.each<Orbit>([](engine::EntityId, Orbit &motion) { motion.angle = 0.f; });
+  advanceWorld(scene, 0.f);
 }
 }
