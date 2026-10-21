@@ -1,253 +1,380 @@
 # Robot Factory Escape
 
-A runnable game consuming the team's `GEF_engine` repository. The verified
-engine revision is [`155b85c`](https://github.com/ShounakDeshmukh/GEF_engine/commit/155b85c4fcea83bd25fe0bb5acc1b3d661953768).
-Artwork is bundled in `assets/sprites/`.
+A cyberpunk-themed platformer built with the team's GEF engine. Escape the robot
+factory by navigating platforms, avoiding the patrol drone, and reaching the
+raised exit. Play offline or connect multiple game processes using client-server
+or hybrid peer-to-peer networking.
 
-For a fresh checkout, place the engine and game side by side:
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?style=plastic&logo=c%2B%2B&logoColor=white)](https://isocpp.org/)
+[![SDL3](https://img.shields.io/badge/SDL-3-00599C?style=plastic&logo=sdl&logoColor=white)](https://www.libsdl.org/)
+[![ZeroMQ](https://img.shields.io/badge/ZeroMQ-333333?style=plastic&logo=zeromq&logoColor=white)](https://zeromq.org/)
+[![CMake](https://img.shields.io/badge/CMake-064F8C?style=plastic&logo=cmake&logoColor=white)](https://cmake.org/)
 
-```sh
-mkdir robot-factory-workspace && cd robot-factory-workspace
-git clone https://github.com/ShounakDeshmukh/GEF_engine.git
-git -C GEF_engine checkout 155b85c
-git clone https://github.com/SuyeshJadhav/robot-factory-escape.git
-cd robot-factory-escape
-```
+<a id="overview"></a>
+## 🎮 Overview
 
-If the engine is already elsewhere, pass
-`-DGEF_ENGINE_DIR=/absolute/path/to/GEF_engine` to the CMake configure
-command. Then build and run the game:
+The game consumes a sibling `GEF_engine` checkout rather than vendoring its own
+engine or duplicating the networking transport. Milestone 3 validates the game
+against engine **0.3.0**, revision
+`0ec1cba862c91d2ed19bf2cf9b890cd51a5dede3`.
 
-```sh
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
-cmake --build build --target robot_factory_escape
-./build/robot_factory_escape
-```
+- Offline, client-server, and hybrid peer-to-peer modes.
+- Animated robot and drone artwork, textured platforms, and a factory backdrop.
+- Gravity, grounded jumps, collision response, and a rideable moving platform.
+- **Client-owned robots; server-owned shared drone and moving platform.**
+- Per-client pause and speed controls, with independent shared-world updates.
+- HUD for controls, game status, player ID, connection, time scale, and render FPS.
+- Eight CTest regression tests, including current-engine networking compatibility.
 
-## Milestone task status
+<a id="contents"></a>
+## 📋 Table of Contents
 
-Status checked against the current implementation on **2026-10-01**. The seven
-game test executables pass. The tables distinguish implemented features from
-remaining verification and submission work.
+- [Overview](#overview)
+- [Features](#features)
+- [Technology Stack](#technology-stack)
+- [Installation](#installation)
+- [How to Play](#how-to-play)
+- [Project Structure](#project-structure)
+- [Milestone Progress](#milestone-progress)
+- [Verification Guide and Limits](#verification-guide)
 
-### Milestone 1: Game and engine foundations
+<a id="features"></a>
+## ✨ Features
 
-These six task groups follow the Milestone 1 reflection. They describe the
-foundation retained in the current game; Milestone 2 extends it with shared
-moving objects, timelines, networking, and concurrency.
+### Core Gameplay
 
-| Task | Status | Implementation in this game | Evidence / how to verify |
-| --- | --- | --- | --- |
-| 1. Game loop and rendering | Implemented | SDL window and renderer, background, platform route, animated robot/drone, exit, and HUD. The current loop separates rendering from fixed-step simulation. | Launch offline; verify the scene renders, resizing works, and closing exits cleanly. See `src/app/game_loop.cpp` and `src/graphics/game_render.cpp`. |
-| 2. Entity system | Implemented | Robot, floor, platforms, drone, exit, and HUD use engine entities with only the components they need. Visual sizes and colliders are separate. | See `src/gameplay/level.cpp` and `include/robot_factory_escape/gameplay/level_layout.hpp`; inspect the five-platform level. |
-| 3. Physics and gravity | Implemented; regression tested | Velocity-based movement, configurable gravity, grounded jumps, and fixed-size collision substeps. Tuning remains in the game. | `player_motion` tests falling, landing, jump height/airtime, and slow frames. Jump and release movement keys in the game. |
-| 4. Input handling | Implemented | A/D or arrows move; Space jumps once per press; R restarts; P toggles scaling. Milestone 2 adds T and 1/2/3. | Hold/release movement keys; hold Space to confirm it does not repeatedly jump. Restart and scaling use press edges. |
-| 5. Collision detection and response | Implemented; regression tested | Solid tops, sides, and undersides; stable grounding; drone-contact respawn; fall reset; exit trigger and win/restart cycle. | `player_motion`, `drone_patrol`, and `game_progress`; play through the platform route and reach the elevated exit. |
-| 6. Constant and proportional scaling | Implemented | P switches between constant pixel size and fitting the 1920x1080 logical scene while preserving aspect ratio. Physics coordinates remain unchanged. | Resize the window and press P. Proportional mode fits the room; constant mode can crop it in a small window. |
+- **Platforming:** A/D or arrow keys move the robot; Space jumps when grounded.
+- **Physics:** Velocity-based movement, gravity, and separate visual/collision bounds.
+- **Moving platform:** Standing robots receive the deck's observed displacement;
+  walking or jumping off releases them. Carrying handles reversals and wall blocking.
+- **Scaling:** P toggles constant-size and proportional rendering for the
+  1920×1080 logical scene.
+- **Local completion:** Reaching the exit stops that robot and displays
+  `ESCAPED! PRESS R TO PLAY AGAIN`. Other network players can continue.
 
-Additional game presentation: cropped animation sheets, readable HUD, common
-spawn, and an elevated exit give the engine features a complete gameplay loop.
-`game_sprites` checks animation setup and transitions.
+### Multiplayer
 
-### Milestone 2: Time and networking foundations
+- **Client-server:** `sessionClient` submits each client's robot state;
+  `sessionServer` applies it and publishes world snapshots.
+- **Hybrid peer-to-peer:** `peerSession` exchanges robot state directly with other
+  peers. The coordinator still provides discovery, roster, drone, and platform state.
+- **Replication:** `sceneReplicator` handles entity snapshots and stable network
+  IDs. Versioned animation bytes travel as extra metadata; texture/sprite handles
+  are reconstructed locally rather than sent over the network.
+- **Local physics only:** Remote robots are visual replicas, not additional local
+  rigid bodies or colliders. Remote players have gold backing markers.
+- **Pause and speed:** T pauses one client's physics; 1/2/3 select 0.5×/1×/2×.
+  Networking continues while paused, and a paused peer republishes its frozen
+  robot so late joiners can receive it.
+- **Lifecycle:** Distinct player IDs, late join, connection status, and removal of
+  departed robots. All robots use the same spawn and can overlap until moved.
 
-Section numbers below follow the Project 2 brief. The supplied weekly rubric
-maps server/client/replication work to **LO 4.1-4.3**, timelines to **LO 5.1-5.2**,
-and concurrent processing to **LO 6.3** (CC 8).
+There is **no interpolation, prediction, or rollback** in the current game.
+Remote motion follows received snapshots; network gaps can produce visible steps.
+The server owns shared-world motion, not every player's movement simulation.
 
-| Assignment task | Status | Implementation in this game / engine | Evidence / how to verify |
-| --- | --- | --- | --- |
-| Section 1: Represent and manipulate time (LO 5.1, 5.2) | Implemented; regression tested | Engine `Timeline` supports a parent clock, adjustable tick rate, pause/resume, and speed scaling. The game uses separate 60 Hz local and server timelines; T pauses locally and 1/2/3 select 0.5x/1x/2x. | `network_state` checks local pause/speed. Compare two clients' time HUDs and motion. |
-| Section 2: Headless game server (LO 4.1) | Implemented | `robot_factory_server` uses the engine's ZeroMQ `sessionServer` and advances server-owned world objects without an SDL window. | Start the server using the commands below; `network_sessions` exercises real localhost sessions. |
-| Section 2: Simultaneous client processes (LO 4.2) | Implemented; two automated / three demonstrated | Distinct client IDs and per-client request/reply workers. The weekly task asks for two clients; the full Project 2 brief requires at least three separate processes and late joins. | `network_sessions` starts two clients in each mode. A three-client client-server run was captured for the reflection; use the three-client commands below to repeat it. |
-| Section 2: Client-controlled entity replication (LO 4.3) | Implemented; regression tested | Each client owns one robot. Client-server mode relays robot snapshots; stable network IDs and animation metadata reconstruct remote visuals. All robots share the same spawn. | `network_state` and `network_sessions`; move one robot and observe it in the other windows, then close a client to verify removal. |
-| Section 3: Multithreaded loop architecture (LO 6.3) | Implemented | Main thread handles SDL input/rendering, `SimulationThread` owns live game state, and engine network workers own transport. Copied frames, latest-value handoffs, and queued commands separate access. | Run multiple clients; see `src/app/game_loop.cpp` and the engine session APIs. The client processes have separate scenes, with no shared gameplay memory. |
-| Section 4: Asynchronous clients at different speeds | Implemented; measured locally | Synchronous ZeroMQ request/reply communication runs through a dedicated server worker for each client, without ROUTER/DEALER. Local time scaling changes simulation/state publication rate independently. | Run 0.5x and 2x clients: while unpaused, server request counters should rise near 30 and 120 per second. The shared world remains at the server's 60 Hz rate. |
-| Section 4: Server-governed moving platforms | Implemented; riding fix verified | The server owns the first platform and drone in both modes. A standing robot receives the platform's observed displacement; jumping or walking off releases it. | `moving_platform` and `network_sessions`; ride through a reversal in both windows. Pause one robot and confirm the world keeps moving. |
-| Section 5: Hybrid peer-to-peer | Implemented; regression tested | Coordinator supplies roster/shared world; peers send robot state directly. Paused peers republish frozen state so late joiners can receive it. | Start peer mode below. `network_sessions` checks direct replication, frozen-state late joins, shared platforms, and departures. |
-| Optional fully decentralized peer negotiation | Not implemented | This game uses the permitted hybrid model and retains a coordinator for world authority and discovery. | No claim is made for the extra-credit option that removes centralized authority. |
+### Technical
 
-### Latest fixes and verification limits
+SDL input/rendering runs on the main thread. The engine's `SimulationThread`
+owns live gameplay state, and session workers own transport. Queued commands,
+keyboard snapshots, and copied render frames separate those responsibilities.
+The render loop targets 60 FPS; the FPS display measures presentation independently
+of the paused/scaled game clock. This is a target, not a performance guarantee.
 
-| Item | Status |
+<a id="technology-stack"></a>
+## 🛠️ Technology Stack
+
+| Component | Current implementation |
 | --- | --- |
-| Robot riding the moving platform | Fixed and tested offline, client-server, and peer-to-peer; includes reversals, walking/jumping off, delayed updates, and wall blocking. |
-| Restart while paused | Fixed; scripted gameplay checks verified return to the common spawn while keeping pause selected. |
-| Sparse shared-world updates during pause | Fixed in both modes. Native-window checks measured roughly 58-59 world updates/sec during pause, previously about 10 in client-server and 4 in peer mode. |
-| Render pacing and FPS visibility | Implemented: 60 FPS target with an independent FPS readout. Local two-client checks stayed near 60 FPS; actual performance depends on machine load. |
-| Reported FPS drop in other, unpaused windows | Not reproduced in the native-window checks; an actual cross-window rendering slowdown is not conclusively diagnosed. Use the FPS readout to distinguish it from sparse network updates. |
-| Two-machine LAN operation | Not yet verified. All recorded network checks used localhost; the launch options accept reachable LAN addresses. |
-| Interpolation / prediction | Not implemented. Remote movement uses received snapshots, so network delay or packet gaps can still cause visible stepping. |
-| Reflections and submission packaging | Milestone 1 and 2 reflections were prepared separately from this repository. Review the Milestone 2 text/screenshots against the latest fixes before submission; upload/submission status is not tracked here. |
+| Language | C++20, required by the game and engine CMake targets |
+| Graphics, input, images, fonts | SDL3, SDL3_image, SDL3_ttf through GEF_engine |
+| Networking | ZeroMQ/cppzmq and the engine's session/replicator APIs |
+| Supporting libraries | GLM, fmt, spdlog, nlohmann/json through the engine dependency configuration |
+| Build | CMake 3.28 or newer; Ninja used for the recorded verification |
+| Tests | CTest runs standalone C++ test executables; the game tests do not use Catch2 |
 
-## Milestone 2: Run and demonstrate multiplayer
+The verified configuration is **Linux, Debug**, against the exact engine revision
+above. Other platforms and Release-build test behavior are not certified here.
 
-Build the game, headless server, and tests from this directory:
+<a id="installation"></a>
+## 🔧 Installation
+
+### Prerequisites
+
+- Git, CMake 3.28+, Ninja, and a C++20-capable compiler/toolchain.
+- A graphical environment supported by the configured SDL3 build for playing.
+- The sibling GEF_engine checkout and its required dependency sources/libraries.
+
+The engine's CMake dependency configuration supplies SDL3 and supporting libraries
+and can use/build ZeroMQ as configured. Installing SDL2 packages is not the setup
+for this code. A first online configuration can fetch dependencies; do that only
+when downloads are intended. The recorded verification used cached sources with
+fetching disabled.
+
+### Setup Instructions
+
+1. **Clone the game and engine side by side** and select the validated engine:
+
+   ```sh
+   mkdir robot-factory-workspace && cd robot-factory-workspace
+   git clone https://github.com/ShounakDeshmukh/GEF_engine.git
+   git -C GEF_engine checkout 0ec1cba862c91d2ed19bf2cf9b890cd51a5dede3
+   git clone https://github.com/SuyeshJadhav/robot-factory-escape.git
+   cd robot-factory-escape
+   ```
+
+2. **Configure and build with dependencies already cached:**
+
+   ```sh
+   cmake -S . -B build -G Ninja \
+     -DCMAKE_BUILD_TYPE=Debug \
+     -DGEF_ENGINE_DIR="$PWD/../GEF_engine" \
+     -DFETCHCONTENT_FULLY_DISCONNECTED=ON \
+     -DENGINE_BUILD_TESTS=OFF \
+     -DENGINE_BUILD_EXAMPLES=OFF \
+     -DENGINE_BUILD_BENCH=OFF \
+     -DGAME_BUILD_TESTS=ON &&
+   cmake --build build --parallel 3
+   ```
+
+   `GEF_ENGINE_DIR` can point to another engine checkout. The game does not pin or
+   update it automatically. If dependency sources are missing, the disconnected
+   configure/build is not a first-time bootstrap: stop and intentionally arrange
+   dependencies or configure with `FETCHCONTENT_FULLY_DISCONNECTED=OFF` only when
+   downloads are acceptable. Do not silently change the engine revision to make
+   a build pass.
+
+3. **Run offline:**
+
+   ```sh
+   ./build/robot_factory_escape
+   ```
+
+   Runtime sprite/font paths are supplied by CMake from the game and engine
+   checkouts; keep those assets available alongside the build.
+
+<a id="how-to-play"></a>
+## ▶️ How to Play
+
+### Controls
+
+| Key | Action |
+| --- | --- |
+| A / Left Arrow | Move left |
+| D / Right Arrow | Move right |
+| Space | Jump; a new press while grounded is required |
+| R | Restart the local game/robot, preserving the selected pause and speed |
+| P | Toggle constant-size/proportional rendering |
+| T | Pause/resume the local simulation |
+| 1 / 2 / 3 | Select 0.5× / 1× / 2× local simulation speed |
+
+### Game Objective
+
+Reach the cyan-framed exit above the final platform. Drone contact or falling
+below the level resets the robot to spawn. Finishing and restarting are local to
+each player; this is not a shared-winner or synchronized-round system.
+
+Speed changes affect local physics and animation, **including jump timing**, not
+only walking. In networked play, the server's platform and drone keep their own
+clock. Restarting while paused leaves the robot suspended at spawn until T resumes;
+that is the intended behavior, not an automatic unpause.
+
+### Multiplayer Setup
+
+> **Listener exposure:** the localhost addresses below do not confine every
+> internal listener to loopback. Engine per-client handlers and peer publishers
+> can bind `tcp://*:0`. Run only in an environment where those temporary listeners
+> are permitted. Do not treat the launch flag below as isolation or a firewall.
+
+Run each server/client command in a separate terminal from the game directory.
+Stop one mode's processes before repeating the demo in the other mode. If a port
+is occupied, inspect it rather than killing an unrelated process.
+
+#### Client-Server Mode
 
 ```sh
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
-cmake --build build
-ctest --test-dir build --output-on-failure
+# Terminal 1: server
+./build/robot_factory_server --mode client-server \
+  --bind tcp://127.0.0.1 --port 5555 --stats-interval-ms 3000
+
+# Terminal 2: first client
+./build/robot_factory_escape --mode client-server \
+  --server-host 127.0.0.1 --server-port 5555 --initial-speed 1
+
+# Terminal 3: second client
+./build/robot_factory_escape --mode client-server \
+  --server-host 127.0.0.1 --server-port 5555 --initial-speed 0.5
 ```
 
-Run one server and three clients in four terminals. Client-server is the default
-network mode; these commands also work across machines when `--server-host` is
-set to the server's reachable address.
+Milestone 2's full demonstration can add a third client by repeating a client
+command in another terminal. The current automated session tests use two clients.
+Select `--initial-speed 2` for a 2× client; interactive 1/2/3 changes the same timeline.
+
+#### Peer-to-Peer Mode
 
 ```sh
-./build/robot_factory_server --mode client-server --bind 'tcp://*' --port 5555 --stats-interval-ms 3000
-./build/robot_factory_escape --mode client-server --server-host 127.0.0.1 --server-port 5555
-./build/robot_factory_escape --mode client-server --server-host 127.0.0.1 --server-port 5555
-./build/robot_factory_escape --mode client-server --server-host 127.0.0.1 --server-port 5555
+# Terminal 1: coordinator
+./build/robot_factory_server --mode peer-to-peer \
+  --bind tcp://127.0.0.1 --port 5556 --stats-interval-ms 3000
+
+# Terminal 2: first peer
+./build/robot_factory_escape --mode peer-to-peer \
+  --server-host 127.0.0.1 --server-port 5556 --advertise-host 127.0.0.1
+
+# Terminal 3: second peer; start after the first has joined
+./build/robot_factory_escape --mode peer-to-peer \
+  --server-host 127.0.0.1 --server-port 5556 --advertise-host 127.0.0.1 \
+  --initial-speed 0.5
 ```
 
-The server assigns distinct player IDs, relays each client's robot through its
-scene snapshot, and advances the shared drone and first platform at 60 Hz. Each window shows its
-own animated robot, other players' robots with gold outlines, the server's drone,
-and the cyan-outlined moving platform. Closing a client removes its robot from the other
-window. All robots spawn and restart at the same position, so they may overlap
-until a player moves. The HUD shows the mode, ID, connection status, pause, speed, and measured render FPS.
-See [the verification guide](docs/multiplayer-verification.md) for the full manual checklist.
+For a paused late-join check, pause the first peer with T before starting the
+second. The second should receive the first robot's frozen state. Move robots
+apart to inspect their individual artwork and animation.
 
-The first platform travels between x=330 and x=450 at 60 logical pixels per
-second. It has the same collider in every client, while its transform comes
-from the server's timeline. Standing robots ride with the platform, including at
-patrol reversals; walking and jumping remain relative to the robot's own controls.
-Platform displacement is applied once per received update, independently of
-local speed. A client pause stops its robot but does not stop
-the shared platform or drone.
-Start the third client after the first two are running to check late joins.
-The optional server statistics print cumulative per-client request, state, and
-snapshot counts every three seconds.
+**LAN is not verified by these localhost tests.** Off-host play requires a
+reachable server bind/address; peer mode also needs each peer's reachable
+`--advertise-host` and access to the engine-assigned ports. Merely replacing a
+client's localhost address is insufficient. Network/firewall configuration is
+separate from the verified local demo.
 
-To compare asynchronous client rates without coordinating key presses, start
-one client with `--initial-speed 0.5` and another with `--initial-speed 2`.
-Subtract two consecutive `updates` counts in the server log: steady-state
-rates should be about 30 and 120 requests per second, respectively. The
-interactive `1`, `2`, and `3` keys change the same local timeline afterward.
-
-The alternative peer-to-peer mode keeps the server as a roster and shared-world
-coordinator while clients exchange their robots directly:
-
-```sh
-./build/robot_factory_server --mode peer-to-peer --bind 'tcp://*' --port 5555 --stats-interval-ms 3000
-./build/robot_factory_escape --mode peer-to-peer --server-host 127.0.0.1 --server-port 5555 --advertise-host 127.0.0.1
-./build/robot_factory_escape --mode peer-to-peer --server-host 127.0.0.1 --server-port 5555 --advertise-host 127.0.0.1
-./build/robot_factory_escape --mode peer-to-peer --server-host 127.0.0.1 --server-port 5555 --advertise-host 127.0.0.1
-```
-
-For a LAN peer session, `--advertise-host` must be that client's reachable IP.
-Allow the server join port and engine-assigned per-client control ports through
-firewalls; peer mode also needs access to engine-assigned direct peer ports.
-
-`R` also works while paused and preserves the selected pause/speed.
-`T` pauses or resumes only the local simulation; `1`, `2`, and `3` set 0.5×,
-1×, and 2× local speed. Other players, the server drone, and the moving platform continue while
-one player is paused. A paused peer periodically republishes its frozen robot
-so a late joiner can see it. Paused clients refresh shared-world state on the
-render loop's wall-clock cadence, rather than waiting for a slow connection
-heartbeat. The render loop targets 60 FPS to leave resources for other client
-windows; this does not cap the 2x simulation's 120 ticks per second.
-`P` toggles rendering scale. Without network
-options, the game runs offline. Winning and `R` restart are local to each
-player.
-
-The engine uses system ZeroMQ development packages when present, or builds
-ZeroMQ from source. CMake may download dependencies on first configuration.
-
-## What works
-
-- Window, event loop, frame timing, and rectangle rendering.
-- Cyberpunk backdrop and five textured raised platforms (the first moves) with an animated cyborg,
-  drone, and code-drawn factory exit. The floor remains a basic shape.
-- Separate visual and collision bounds matched to the solid artwork. Only the local robot has a rigid body during gameplay.
-- A/D or the left/right arrow keys move the robot at 300 logical pixels per second. Releasing both keys stops
-  horizontal movement; holding both cancels out. Gravity accelerates it downward.
-- The robot lands on the floor and platforms, stops against platform sides, and
-  stops rising when it hits an underside. Space jumps once per press while grounded.
-- The robot starts above the floor and resets its position and velocity after
-  falling below the screen (for example, after walking off the floor's end).
-- P toggles scaling once per press. Starts proportional at a 1920×1080 logical size.
-- The engine text module renders a HUD with controls, the objective, and live status.
-- Closing the window exits cleanly.
-
-Movement, solid collisions, jumping, drone patrol, winning, and restart are implemented. The drone
-moves between x=500 and x=1600 at 180 logical pixels per second without gravity.
-Its patrol is at y=440, crossing the robot's path on the second and fourth platforms.
-Contact resets the robot position, velocity, and grounded state; the drone keeps
-its patrol progress. The exit uses a cyan frame with orange factory accents;
-touching it turns its status lights green and freezes local gameplay. Press R to restart
-at any time: in offline mode the robot, drone, and moving platform reset; in network mode
-the robot resets while the server drone continues. The exit color resets. P still works after
-winning, and restarting preserves the selected scaling mode.
-Constant scaling can crop this room in a smaller window; proportional fits it.
-The exit is elevated above a five-platform route, so reaching it requires a sequence
-of jumps rather than simply walking across the factory floor.
-Uphill steps rise 190 logical pixels, close to the roughly 211-pixel simulated jump
-height. The middle platform provides a descent before the final two climbs; wait
-for the drone to pass before crossing the exposed platforms.
-
-## Project structure
+<a id="project-structure"></a>
+## 📁 Project Structure
 
 ```text
-src/
-  app/          Entry point, Game construction, window/simulation loop
-  gameplay/     Level construction, input, progress, movement and collisions
-  graphics/     Rendering, exit artwork, sprite animation
-  networking/   Session setup, incoming state, outgoing robot snapshots
-  server/       Headless authoritative world and server CLI
-include/robot_factory_escape/
-  game.hpp                Game orchestration and state ownership
-  game_settings.hpp       Movement tuning
-  gameplay/               Rules, patrols, and shared level geometry
-  graphics/               Sprite and HUD helpers
-  networking/             Replication metadata
-tests/                     Regression tests and their CMake configuration
-docs/                      Manual verification guide
+robot-factory-escape/
+├── assets/sprites/                       # Background, platforms, robot, drone
+├── build/                                # Generated build; not source
+├── docs/
+│   ├── multiplayer-verification.md        # Commands, evidence, manual checks
+│   └── networking-refactor-milestone.md   # Milestone 3 change/status record
+├── include/robot_factory_escape/
+│   ├── game.hpp
+│   ├── game_settings.hpp
+│   ├── gameplay/                         # Layout, progress, motion, patrols
+│   ├── graphics/                         # Sprite helpers and HUD labels
+│   └── networking/network_state.hpp      # IDs and animation metadata
+├── src/
+│   ├── app/{main,game,game_loop}.cpp
+│   ├── gameplay/{level,gameplay,player_motion}.cpp
+│   ├── graphics/{game_render,game_sprites}.cpp
+│   ├── networking/game_network.cpp
+│   └── server/main.cpp
+├── tests/
+│   ├── CMakeLists.txt
+│   └── *_tests.cpp                       # Eight registered test executables
+├── CMakeLists.txt
+└── README.md
 ```
 
-`gameplay/level_layout.hpp` is the shared source of platform, robot, and drone
-geometry. Both server and client use it so replicated collision bounds match.
-`game_settings.hpp` contains gravity (1800), jump speed (880), and run speed (300),
-all in logical pixels and seconds. The engine checkout stays independent of the
-game's rules.
+<a id="milestone-progress"></a>
+## 📊 Milestone Progress
 
-`gameplay/player_motion.cpp` resolves axes separately with physics steps no larger
-than 1/120 second and a catch-up cap of 0.1 second. It is tuned for this level's
-rectangular solids, rather than arbitrary high-speed collision detection.
-Platform riding uses observed displacement only while the robot touches the
-old deck. Carry is swept against other solids and does not alter input velocity.
-Offline updates and network snapshots use the same carry routine. Paused clients
-discard carry deltas, so resuming never applies a backlog of platform motion.
+### Milestone 1: Game and Engine Foundations
 
-Game state changes belong to the simulation thread. The main thread posts
-restart/time controls (including during pause) and renders copied scenes.
-Network updates are applied on the simulation thread even between local ticks.
+Implemented: game loop/rendering, entities, physics/gravity, input, collision
+response, and constant/proportional scaling. The current game adds the factory
+artwork, platform route, drone hazard, exit feedback, and HUD on those foundations.
 
-Build and run all checks with:
+### Milestone 2: Time and Networking Foundations
+
+These capabilities predate the Milestone 3 compatibility regression:
+
+| Area | Implementation and evidence |
+| --- | --- |
+| Local time manipulation (LO 5.1, 5.2) | Engine timelines support pause/resume and 0.5×/1×/2×; `network_state` checks controlled-clock behavior. |
+| Headless server and simultaneous clients (LO 4.1, 4.2) | Separate server/client processes, distinct IDs and session workers; `network_sessions` exercises two clients in each mode. |
+| Client-controlled replication (LO 4.3) | Each client owns its robot; IDs and animation metadata reconstruct remote visuals. |
+| Concurrent processing (LO 6.3) | SDL input/rendering, simulation ownership, and transport workers are separated. |
+| Asynchronous clients and shared world | Local simulation rates are independent; the server owns the moving platform and drone. |
+| Hybrid peer-to-peer | Direct robot exchange, coordinator roster/world state, paused late join and departure cleanup. |
+
+### Between Milestone 2 and the Current Validation
+
+Compared with the Milestone 2 merge (`63d90bd`), subsequent build/gameplay work
+already present at `ea13bf2`:
+
+- Organized the former large game implementation into `app`, `gameplay`,
+  `graphics`, and `networking` modules, plus separate test targets.
+- Made the sibling engine checkout explicit through `GEF_ENGINE_DIR`.
+- Refined platform carrying, deck collisions and detachment, with focused
+  `moving_platform` and session regression checks.
+- Moved restart handling to queued commands so R also works while paused.
+- Refreshed shared-world state on the render loop's wall-clock cadence during
+  pause rather than relying on sparse heartbeat updates.
+- Added a 60 FPS render target and a presentation FPS readout independent of
+  local simulation pause/speed.
+
+These are part of the transition from the Milestone 2 snapshot, not new features
+invented by the Milestone 3 test/documentation commits.
+
+### Milestone 3: Updated Networking Refactor
+
+**Assignment:** “Update your game to include the new networking refactor.”
+
+**Status:** implemented and verified against that stated requirement with the
+current engine revision. Complete graphical sign-off remains a separate limit.
+
+| Change / check | What Milestone 3 establishes |
+| --- | --- |
+| Current engine integration | The production game/server call `sessionClient`, `sessionServer`, `peerSession` and `sceneReplicator` from engine revision `0ec1cba862c91d2ed19bf2cf9b890cd51a5dede3`. Existing session integration was retained; no second transport layer or ownership redesign was added. |
+| New `network_refactor` regression | Real Binary/JSON round trips check robot ID/position, bound-entity reuse, exact animation metadata, local texture preservation, truncated-packet rejection and owner cleanup. Production sessions continue using default Binary. |
+| Test registration | `tests/CMakeLists.txt` adds the compatibility target to the existing helper; eight tests are registered. |
+| Repeatability and evidence | Disconnected Debug configure/build passed; each of the three focused networking tests passed five repetitions; the full suite passed 8/8 and was rerun before integration into main. |
+| Independent review | Three read-only reviewers checked production integration, test/CMake validity and assignment/demo boundaries; no blocker to the stated refactor-adoption task was found. |
+| Change record | [Milestone 3 record](docs/networking-refactor-milestone.md) documents the exact contribution and qualifications; [verification guide](docs/multiplayer-verification.md) records commands and observations. |
+
+The milestone increment from `ea13bf2` added the compatibility test, its CMake
+registration, and verification/change records. It did **not** add interpolation,
+prediction, rollback, a shared winner, or synchronized restarts.
+
+<a id="verification-guide"></a>
+## 📖 Verification Guide and Limits
+
+After the temporary-listener prerequisite above is satisfied:
 
 ```sh
-cmake --build build
-ctest --test-dir build --output-on-failure
+export RFE_NETWORK_TESTS_AUTHORIZED=1
+
+test "$RFE_NETWORK_TESTS_AUTHORIZED" = 1 &&
+ctest --test-dir build -R '^network_(state|refactor|sessions)$' \
+  --repeat until-fail:5 --no-tests=error --output-on-failure &&
+ctest --test-dir build --no-tests=error --output-on-failure
 ```
 
-The repository's `.clang-format` keeps C++ formatting consistent.
+The environment variable acknowledges permission to run socket checks; it does
+not change the engine's bind addresses. Configure/build successfully first so
+CTest is not exercising stale executables.
 
-## Artwork
+| Test | Scope |
+| --- | --- |
+| `player_motion` | Grounded jumps, motion, collision and input-related movement rules |
+| `moving_platform` | Carrying, reversals, walking/jumping off, pause/resume, delayed updates and wall blocking |
+| `drone_patrol` | Patrol movement, collision/contact reset behavior |
+| `game_progress` | Exit detection, win state and restart |
+| `game_sprites` | Animation clips, metadata and local/remote sprite setup using headless SDL |
+| `network_state` | IDs/metadata, remote physics exclusion and controlled-clock pause/speed |
+| `network_refactor` | Current-engine Binary/JSON consumer compatibility and selected invalid-input/cleanup cases |
+| `network_sessions` | Real client-server/peer sessions, robot/world delivery, platform carrying, paused reception, late join and departures |
 
-The supplied sprite folder now lives in `assets/sprites/`. The background is drawn
-first across the 1920×1080 logical scene. Each platform uses the solid upper 1024×224
-area of its source image and renders at 300×66. Its collision surface is a separate
-300×24 rectangle across the top, so the player can travel through the transparent
-space underneath or land on the deck. Source image artifacts are preserved.
-Robot idle/walk/jump sheets and the drone movement sheet are animated by
-`src/graphics/game_sprites.cpp`. Facing follows horizontal movement, jumping plays once, and
-idle/walk/drone clips loop. Winning freezes playback; respawning resets it.
-The sheets use inferred 512px robot cells and 256px drone cells. Their large
-transparent margins are cropped separately for idle, walking, and jumping poses.
-The robot renders at 96×128 with a tighter 80×128 body collider; the drone uses
-130×80, so their visible scale better matches
-the platform. Action/fire sheets
-and the static drone image are retained but unused because there is no combat.
-CMake supplies the asset directory, so running from a different working directory
-is supported. Reconfigure CMake if you move this checkout.
+### What Is Not Claimed
+
+- **Full graphical sign-off:** selected human pause/speed/late-join checks worked,
+  but every manual control, riding, finish/replay and normal window-close check
+  has not been individually certified. A gold backing rectangle is deliberately
+  drawn for animated remote players; it alone is not a networking failure.
+- **Release-test certification:** the existing `network_state` test has required
+  operations inside `assert`; `NDEBUG` removes them. Recorded passing evidence
+  is Debug-only. The new compatibility test uses runtime checks.
+- **Exhaustive parser safety:** truncation checks cover one truncated encoded
+  packet per representation and selected state, not arbitrary malformed packets
+  or complete scene atomicity. JSON is tested at replicator level, not as a
+  selectable graphical session mode.
+- **Presentation polish after winning:** shared drone animation can freeze in
+  the winner's window even while network updates move its position.
+- **LAN, public-network, mixed-version or cross-architecture interoperability:**
+  these are not established by localhost checks.
+
+See [the verification guide](docs/multiplayer-verification.md) for the detailed
+manual checklist and historical observations, and [the Milestone 3 record](docs/networking-refactor-milestone.md)
+for the assignment-to-code/evidence mapping. Automated networking compatibility
+is verified; that does not mean every graphical or deployment scenario passed.
