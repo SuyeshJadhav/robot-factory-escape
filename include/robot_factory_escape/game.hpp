@@ -2,6 +2,7 @@
 
 #include <engine/engine.hpp>
 #include <robot_factory_escape/game_settings.hpp>
+#include <robot_factory_escape/gameplay/factory_gameplay.hpp>
 #include <robot_factory_escape/gameplay/drone_patrol.hpp>
 #include <robot_factory_escape/gameplay/game_progress.hpp>
 #include <robot_factory_escape/gameplay/moving_platform.hpp>
@@ -32,7 +33,6 @@ private:
   void createLevel();
   void restart(engine::Scene &scene);
   void connectNetwork(const NetworkOptions &network);
-  engine::EntityId createBox(glm::vec2 position, glm::vec2 size, engine::Color color);
   void handleInput(engine::Scene &scene, const engine::KeyboardState &keyboard);
   void update(engine::Scene &scene, float deltaSeconds);
   void drawExit();
@@ -52,28 +52,21 @@ private:
   std::unique_ptr<engine::SimulationThread> simulation_;
 
   engine::EntityId robot_{};
-  engine::EntityId floor_{};
-  engine::EntityId drone_{};
-  engine::EntityId movingPlatform_{};
-  engine::EntityId exit_{};
+  factory::World world_;
   engine::EntityId statusText_{};
   engine::EntityId networkText_{};
   engine::EntityId timeText_{};
   engine::EntityId fpsText_{};
-  std::vector<engine::EntityId> solids_;
   engine::TextureId backdropTexture_{};
   GameSprites sprites_;
 
   bool jumpKeyWasPressed_ = false;
   bool grounded_ = false;
-  DronePatrol dronePatrol_;
-  MovingPlatformPatrol platformPatrol_;
   GameProgress progress_;
   std::atomic<bool> renderedWon_{false};
   std::unique_ptr<engine::networking::sessionClient> clientSession_;
   std::unique_ptr<engine::networking::peerSession> peerSession_;
   engine::ClientId localClientId_ = 0;
-  glm::vec2 localSpawn_{120.f, 300.f};
   std::unordered_set<engine::ClientId> remoteIds_;
   bool peerToPeer_ = false;
   bool connected_ = true;

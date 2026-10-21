@@ -9,7 +9,7 @@ void Game::render() {
   renderer_.fillRect({16.f, 12.f}, {810.f, 212.f}, {7, 24, 31, 255});
   renderer_.fillRect({16.f, 12.f}, {4.f, 212.f}, {80, 255, 220, 255});
   drawExit();
-  const auto platformPosition = scene_.transform(movingPlatform_).position;
+  const auto platformPosition = scene_.transform(world_.movingPlatform).position;
   // Highlight the actual deck without filling the sprite's transparent margins.
   const engine::Color deckLight{80, 255, 220, 255};
   renderer_.fillRect(platformPosition + glm::vec2{0.f, -3.f}, {levelLayout::platformSize.x, 3.f},
@@ -20,7 +20,7 @@ void Game::render() {
   // Gold markers distinguish other players despite the renderer using local
   // sprite art.
   for (const auto &[id, shape] : scene_.shapes()) {
-    if (id == robot_ || id == drone_ || !scene_.getSpriteAnimation(id))
+    if (id == robot_ || id == world_.drone || !scene_.getSpriteAnimation(id))
       continue;
     if (shape.color.r == 255 && shape.color.g == 210 && shape.color.b == 60) {
       const auto position = scene_.transform(id).position;
@@ -32,7 +32,7 @@ void Game::render() {
 }
 
 void Game::drawExit() {
-  const auto position = scene_.transform(exit_).position;
+  const auto position = scene_.transform(world_.exit).position;
   const engine::Color frame =
       renderedWon_.load() ? engine::Color{80, 255, 140, 255} : engine::Color{50, 220, 235, 255};
   const engine::Color indicator =

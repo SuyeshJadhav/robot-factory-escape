@@ -11,8 +11,8 @@ void Game::connectNetwork(const NetworkOptions &network) {
     if (!peerSession_->join())
       throw std::runtime_error("could not join peer coordinator at " + endpoint);
     localClientId_ = peerSession_->id();
-    peerSession_->replicator().bind(robotNet::droneId, drone_);
-    peerSession_->replicator().bind(robotNet::movingPlatformId, movingPlatform_);
+    peerSession_->replicator().bind(robotNet::droneId, world_.drone);
+    peerSession_->replicator().bind(robotNet::movingPlatformId, world_.movingPlatform);
     if (peerSession_->replicator().track(robot_) != robotNet::robotId(localClientId_))
       throw std::runtime_error("unexpected robot network ID");
     peerSession_->start();
@@ -21,14 +21,15 @@ void Game::connectNetwork(const NetworkOptions &network) {
     if (!clientSession_->join())
       throw std::runtime_error("could not join server at " + endpoint);
     localClientId_ = clientSession_->id();
-    clientSession_->replicator().bind(robotNet::droneId, drone_);
-    clientSession_->replicator().bind(robotNet::movingPlatformId, movingPlatform_);
+    clientSession_->replicator().bind(robotNet::droneId, world_.drone);
+    clientSession_->replicator().bind(robotNet::movingPlatformId, world_.movingPlatform);
     if (clientSession_->replicator().track(robot_) != robotNet::robotId(localClientId_))
       throw std::runtime_error("unexpected robot network ID");
     clientSession_->setHeartbeat(100);
     clientSession_->start();
   }
-  resetRobot(scene_, robot_, localSpawn_, grounded_);
+  factory::assignSpawn(scene_,world_,robot_,localClientId_);
+  factory::respawnPlayer(scene_,robot_,grounded_);
   scene_.getText(networkText_)->val = std::string("NETWORK: ") + (peerToPeer_ ? "PEER" : "SERVER") +
                                       "  PLAYER " + std::to_string(localClientId_) + "  CONNECTED";
   engine::log::info("Joined as client {} ({})", localClientId_,
@@ -46,7 +47,7 @@ void Game::publishRobot(engine::Scene &scene, std::int64_t tick) {
 }
 
 void Game::pumpNetwork(engine::Scene &scene, bool paused) {
-  const auto previousPlatform = scene.transform(movingPlatform_).position;
+  const auto previousPlatform = scene.transform(world_.movingPlatform).position;
   if (peerToPeer_) {
     peerSession_->applyUpdates(scene);
     remoteIds_.clear();
@@ -67,7 +68,7 @@ void Game::pumpNetwork(engine::Scene &scene, bool paused) {
   // Snapshots follow the server clock, independently of the local tick rate.
   // Applying each observed delta here also handles multiple polls per tick.
   if (!paused && !progress_.won)
-    carryPlayerWithPlatform(scene, robot_, movingPlatform_, previousPlatform, solids_, grounded_);
+    carryPlayerWithPlatform(scene, robot_, world_.movingPlatform, previousPlatform, world_.solids, grounded_);
   auto &replicator = peerToPeer_ ? peerSession_->replicator() : clientSession_->replicator();
   // A snapshot can arrive before its roster event. Exclude every foreign
   // robot from physics immediately, even if its visual setup waits one poll.
