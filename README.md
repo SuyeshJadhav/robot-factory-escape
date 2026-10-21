@@ -460,10 +460,12 @@ graphical/deployment scenario.
 |---|---|---|
 | Requirements | `CSC 481_581 Fall 2025 - Milestone 3` course brief | Cite the actual course instructions and confirm course-specific writeup/benchmark requirements. |
 | Engine code/API | [Team GEF_engine](https://github.com/ShounakDeshmukh/GEF_engine), pinned revision above | Engine `LICENSE` is MIT, copyright 2026 The Deadlock Engine Authors; retain its notice when distributing covered code. |
-| Background, platform, robot and drone sprites | Tracked PNGs under `assets/sprites/{background,platform,robot_sprite,drone}` | Original author/source URL and license evidence are not established here. Obtain them before submission; filenames alone are not permission. |
-| HUD font | Engine's tracked `examples/hello_entity/assets/SuperBouncer.ttf` | Confirm font-specific source, license and required credit; do not infer a font license from the engine-code license. |
+| Background, platform, robot and drone sprites | Course-provided artwork obtained from the CSC 481 sprite selector, [`https://issdev.delta.ncsu.edu/courses/csc481-sprite-selector/`](https://issdev.delta.ncsu.edu/courses/csc481-sprite-selector/) (NC State DELTA). Tracked PNGs under `assets/sprites/{background,platform,robot_sprite,drone}`. | Course-supplied material for this assignment, not original student artwork and not third-party art sourced independently. Used within the course; no redistribution right beyond it is claimed. |
+| HUD font | Engine's tracked `examples/hello_entity/assets/SuperBouncer.ttf`, added to GEF_engine by teammate Parth in commit `dd6c69e`. The file embeds no designer, copyright or license metadata. | Origin not yet confirmed with the teammate who added it. Do not infer a font license from the engine's MIT code license. |
 | Supporting libraries | SDL3/image/ttf, GLM, fmt, spdlog, nlohmann/json, cppzmq/ZeroMQ via engine dependencies | Retain applicable upstream notices if distributing them; no dependencies were downloaded or newly bundled in this change. |
 | AI assistance | Hermes Agent (Nous Research) assisted with planning, implementation and tests for this increment | Disclose that assistance according to the course policy; recorded local build/test results are not a claim of unaided authorship. |
 
-Missing sprite/font provenance is a submission-readiness blocker. No source archive,
-paper, performance results, or actual course submission was produced in this run.
+Sprite provenance is recorded above: the artwork is course-supplied through the
+CSC 481 sprite selector. The HUD font's origin is the one open attribution item.
+No source archive, paper, performance results, or actual course submission was
+produced in this run.
