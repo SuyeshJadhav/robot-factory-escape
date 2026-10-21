@@ -1,7 +1,13 @@
 #include <robot_factory_escape/game.hpp>
 #include <robot_factory_escape/gameplay/level_layout.hpp>
+#include <robot_factory_escape/graphics/camera.hpp>
 
 void Game::render() {
+  const float viewportWidth = renderer_.scalingMode() == engine::ScalingMode::Proportional
+      ? levelLayout::levelSize.x : static_cast<float>(window_.width());
+  const auto camera = factory::cameraForPlayer(scene_,robot_,viewportWidth);
+  renderer_.setCamera(camera);
+  const auto renderScene = factory::cameraRenderScene(scene_,camera);
   renderer_.clear({0, 0, 0, 255});
   // Draw the backdrop first, outside the unordered entity collection.
   renderer_.drawTexture(backdropTexture_, {0.f, 0.f}, levelLayout::levelSize);
@@ -9,7 +15,7 @@ void Game::render() {
   renderer_.fillRect({16.f, 12.f}, {810.f, 212.f}, {7, 24, 31, 255});
   renderer_.fillRect({16.f, 12.f}, {4.f, 212.f}, {80, 255, 220, 255});
   drawExit();
-  const auto platformPosition = scene_.transform(world_.movingPlatform).position;
+  const auto platformPosition = scene_.transform(world_.movingPlatform).position - camera;
   // Highlight the actual deck without filling the sprite's transparent margins.
   const engine::Color deckLight{80, 255, 220, 255};
   renderer_.fillRect(platformPosition + glm::vec2{0.f, -3.f}, {levelLayout::platformSize.x, 3.f},
@@ -23,16 +29,16 @@ void Game::render() {
     if (id == robot_ || id == world_.drone || !scene_.getSpriteAnimation(id))
       continue;
     if (shape.color.r == 255 && shape.color.g == 210 && shape.color.b == 60) {
-      const auto position = scene_.transform(id).position;
+      const auto position = scene_.transform(id).position - camera;
       renderer_.fillRect(position + glm::vec2{-3.f, -3.f}, {102.f, 134.f}, {255, 210, 60, 255});
     }
   }
-  renderer_.drawEntities(scene_);
+  renderer_.drawEntities(renderScene);
   renderer_.present();
 }
 
 void Game::drawExit() {
-  const auto position = scene_.transform(world_.exit).position;
+  const auto position = scene_.transform(world_.exit).position - renderer_.camera();
   const engine::Color frame =
       renderedWon_.load() ? engine::Color{80, 255, 140, 255} : engine::Color{50, 220, 235, 255};
   const engine::Color indicator =
