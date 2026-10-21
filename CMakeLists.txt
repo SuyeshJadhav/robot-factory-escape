@@ -21,6 +21,7 @@ add_subdirectory("${GEF_ENGINE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/engine" EXCLUD
 add_library(robot_factory_core STATIC
     src/gameplay/player_motion.cpp
     src/gameplay/factory_world.cpp
+    src/gameplay/respawn.cpp
     src/graphics/game_sprites.cpp
 )
 target_include_directories(robot_factory_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
