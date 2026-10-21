@@ -6,7 +6,6 @@ endfunction()
 
 add_game_test(player_motion)
 add_game_test(moving_platform)
-add_game_test(drone_patrol)
 add_game_test(game_progress)
 add_game_test(game_sprites)
 add_game_test(network_state)
@@ -17,6 +16,7 @@ add_game_test(factory_motion)
 add_game_test(respawn)
 add_game_test(factory_gameplay)
 add_game_test(camera)
+add_game_test(factory_replication)
 
 target_compile_definitions(game_sprites_tests PRIVATE
     GAME_ASSET_DIR="${PROJECT_SOURCE_DIR}/assets/sprites/"

@@ -3,9 +3,7 @@
 #include <engine/engine.hpp>
 #include <robot_factory_escape/game_settings.hpp>
 #include <robot_factory_escape/gameplay/factory_gameplay.hpp>
-#include <robot_factory_escape/gameplay/drone_patrol.hpp>
 #include <robot_factory_escape/gameplay/game_progress.hpp>
-#include <robot_factory_escape/gameplay/moving_platform.hpp>
 #include <robot_factory_escape/graphics/game_sprites.hpp>
 #include <robot_factory_escape/networking/network_state.hpp>
 

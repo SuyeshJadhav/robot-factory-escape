@@ -7,8 +7,7 @@
 
 namespace robotNet {
 
-// The drone is the server's first entity and each client tracks its robot
-// first.
+// Agreed server-owned network IDs; independent of local entity allocation.
 inline constexpr engine::NetId droneId = engine::makeNetId(engine::kServerId, 0);
 inline constexpr engine::NetId movingPlatformId = engine::makeNetId(engine::kServerId, 1);
 inline engine::NetId robotId(engine::ClientId client) { return engine::makeNetId(client, 0); }

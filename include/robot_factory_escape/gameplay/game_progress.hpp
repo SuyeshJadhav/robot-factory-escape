@@ -1,6 +1,6 @@
 #pragma once
 
-#include <robot_factory_escape/gameplay/drone_patrol.hpp>
+#include <engine/engine.hpp>
 
 struct GameProgress {
   bool won = false;
@@ -14,11 +14,4 @@ struct GameProgress {
     return true;
   }
 
-  void restart(engine::Scene &scene, engine::EntityId robot, engine::EntityId drone,
-               glm::vec2 spawn, bool &grounded, DronePatrol &patrol) {
-    resetRobot(scene, robot, spawn, grounded);
-    patrol = DronePatrol{};
-    patrol.advance(scene, drone, 0.f);
-    won = false;
-  }
 };

@@ -1,8 +1,6 @@
 #include <engine/engine.hpp>
-#include <robot_factory_escape/gameplay/drone_patrol.hpp>
-#include <robot_factory_escape/gameplay/level_layout.hpp>
-#include <robot_factory_escape/gameplay/moving_platform.hpp>
-#include <robot_factory_escape/networking/network_state.hpp>
+#include <robot_factory_escape/gameplay/factory_world.hpp>
+#include <robot_factory_escape/networking/world_binding.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -59,21 +57,8 @@ int main(int argc, char **argv) {
     engine::Timeline realTime;
     engine::Timeline serverTime(realTime, 60);
     engine::Scene scene;
-    const auto drone = scene.createEntity();
-    DronePatrol patrol;
-    patrol.advance(scene, drone, 0.f);
-    scene.addShape(drone, {.size = levelLayout::droneSize, .color = {235, 85, 93, 255}});
-    scene.addCollider(drone, {.size = levelLayout::droneSize});
-    if (server.replicator().track(drone) != robotNet::droneId)
-      throw std::runtime_error("unexpected drone network ID");
-    const auto movingPlatform = scene.createEntity();
-    MovingPlatformPatrol platformPatrol;
-    platformPatrol.advance(scene, movingPlatform, 0.f);
-    scene.addShape(movingPlatform,
-                   {.size = levelLayout::platformSize, .color = {255, 255, 255, 255}});
-    scene.addCollider(movingPlatform, {.size = levelLayout::platformColliderSize});
-    if (server.replicator().track(movingPlatform) != robotNet::movingPlatformId)
-      throw std::runtime_error("unexpected moving-platform network ID");
+    const auto world = factory::createWorld(scene);
+    robotNet::bindWorld(server.replicator(),world);
     server.publishScene(scene, 0);
     server.start();
     std::atomic<float> platformX{MovingPlatformPatrol::left};
@@ -82,9 +67,8 @@ int main(int argc, char **argv) {
         std::move(scene), serverTime, [&](const engine::TickContext &ctx) {
           if (!peerToPeer)
             server.applyClientStates(ctx.scene);
-          patrol.advance(ctx.scene, drone, ctx.dt);
-          platformPatrol.advance(ctx.scene, movingPlatform, ctx.dt);
-          platformX.store(ctx.scene.transform(movingPlatform).position.x);
+          factory::advanceWorld(ctx.scene,ctx.dt);
+          platformX.store(ctx.scene.transform(world.movingPlatform).position.x);
           server.publishScene(ctx.scene, ctx.tick);
           for (const auto &event : server.drainRosterEvents()) {
             engine::log::info("Client {} {}; {} connected", event.client.id,

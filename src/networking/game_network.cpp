@@ -1,5 +1,6 @@
 #include <robot_factory_escape/game.hpp>
 #include <robot_factory_escape/gameplay/player_motion.hpp>
+#include <robot_factory_escape/networking/world_binding.hpp>
 
 void Game::connectNetwork(const NetworkOptions &network) {
   peerToPeer_ = network.peerToPeer;
@@ -11,8 +12,7 @@ void Game::connectNetwork(const NetworkOptions &network) {
     if (!peerSession_->join())
       throw std::runtime_error("could not join peer coordinator at " + endpoint);
     localClientId_ = peerSession_->id();
-    peerSession_->replicator().bind(robotNet::droneId, world_.drone);
-    peerSession_->replicator().bind(robotNet::movingPlatformId, world_.movingPlatform);
+    robotNet::bindWorld(peerSession_->replicator(), world_);
     if (peerSession_->replicator().track(robot_) != robotNet::robotId(localClientId_))
       throw std::runtime_error("unexpected robot network ID");
     peerSession_->start();
@@ -21,8 +21,7 @@ void Game::connectNetwork(const NetworkOptions &network) {
     if (!clientSession_->join())
       throw std::runtime_error("could not join server at " + endpoint);
     localClientId_ = clientSession_->id();
-    clientSession_->replicator().bind(robotNet::droneId, world_.drone);
-    clientSession_->replicator().bind(robotNet::movingPlatformId, world_.movingPlatform);
+    robotNet::bindWorld(clientSession_->replicator(), world_);
     if (clientSession_->replicator().track(robot_) != robotNet::robotId(localClientId_))
       throw std::runtime_error("unexpected robot network ID");
     clientSession_->setHeartbeat(100);
