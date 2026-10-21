@@ -17,6 +17,8 @@ add_game_test(respawn)
 add_game_test(factory_gameplay)
 add_game_test(camera)
 add_game_test(factory_replication)
+add_game_test(factory_network_sessions)
+set_tests_properties(factory_network_sessions PROPERTIES TIMEOUT 90)
 
 target_compile_definitions(game_sprites_tests PRIVATE
     GAME_ASSET_DIR="${PROJECT_SOURCE_DIR}/assets/sprites/"
