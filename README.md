@@ -55,18 +55,6 @@ example assets, including `examples/hello_entity/assets/SuperBouncer.ttf`.
 | R | Restart |
 | Close window | Quit |
 
-## Tests
-
-After building:
-
-```sh
-ctest --test-dir build --output-on-failure
-```
-
-The five checks cover build setup, player movement, drone patrol, game progress,
-and sprites. Setup checks run offline with configuration-only fixtures; the
-sprite check uses a headless renderer automatically.
-
 ## Troubleshooting
 
 | Problem | Action |
