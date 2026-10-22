@@ -54,27 +54,3 @@ example assets, including `examples/hello_entity/assets/SuperBouncer.ttf`.
 | P | Toggle display scaling |
 | R | Restart |
 | Close window | Quit |
-
-## Troubleshooting
-
-| Problem | Action |
-| --- | --- |
-| GitHub download fails | Check internet access and Git installation, then rerun configuration. |
-| Local engine/font not found | Correct the optional local path, or pass `-DGEF_ENGINE_DIR=` to restore automatic downloading. |
-| Older build uses the wrong engine | Use a fresh build directory or clear the old override with `-DGEF_ENGINE_DIR=`. |
-| `No available video device` | Start the game from a graphical desktop, not a headless terminal. |
-| Image/font cannot be opened | Keep the game assets and build directory in place. Reconfigure and rebuild after moving the checkout; copying only the executable is not supported. |
-
-For a Linux headless startup check only:
-
-```sh
-SDL_VIDEODRIVER=dummy SDL_RENDER_DRIVER=software timeout 8s ./build/robot_factory_escape
-```
-
-`Factory ready` confirms startup; exit 124 means the timeout stopped the game.
-This does not open a playable window or verify keyboard input.
-
-Verified on Linux with a fresh online configuration, no sibling engine or local
-source overrides: engine v0.1.0 downloaded, build succeeded, all five tests
-passed, and headless startup reached `Factory ready`. Other operating systems
-and full interactive gameplay have not been verified.
