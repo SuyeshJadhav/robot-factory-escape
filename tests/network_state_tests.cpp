@@ -17,15 +17,35 @@ int main() {
   assert(platformScene.transform(platform).position.x == 450.f);
   platformPatrol.advance(platformScene, platform, 2.f);
   assert(platformScene.transform(platform).position.x == 330.f);
-  const auto bytes = robotNet::encode({5, 32, 12});
+  const auto bytes = robotNet::encode({5, 32, 12, 0x01020304, false});
   const auto state = robotNet::decode(bytes);
   assert(state && state->clip == 5 && state->frame == 32 && state->elapsedMilliseconds == 12);
+  assert(!state->alive && state->lifeRevision == 0x01020304);
+  assert(bytes.size() == 11 && bytes[0] == std::byte{2} && bytes[6] == std::byte{0} &&
+         bytes[7] == std::byte{4} && bytes[10] == std::byte{1});
+  const engine::networking::Bytes legacy{std::byte{1}, std::byte{5}, std::byte{32},
+                                        std::byte{0}, std::byte{12}, std::byte{0}};
+  const auto legacyState = robotNet::decode(legacy);
+  assert(legacyState && legacyState->alive && legacyState->lifeRevision == 0 &&
+         legacyState->clip == 5 && legacyState->frame == 32 &&
+         legacyState->elapsedMilliseconds == 12);
   assert(!robotNet::decode({}));
   auto bad = bytes;
-  bad[0] = std::byte{2};
+  bad[0] = std::byte{3};
   assert(!robotNet::decode(bad));
   bad = bytes;
   bad[1] = std::byte{6};
+  assert(!robotNet::decode(bad));
+  bad = bytes;
+  bad[6] = std::byte{2};
+  assert(!robotNet::decode(bad));
+  for (std::size_t size = 0; size < bytes.size(); ++size)
+    assert(!robotNet::decode({bytes.data(), size}));
+  bad = bytes;
+  bad.push_back(std::byte{0});
+  assert(!robotNet::decode(bad));
+  bad = legacy;
+  bad.push_back(std::byte{0});
   assert(!robotNet::decode(bad));
 
   engine::Scene ownerScene;
