@@ -96,6 +96,39 @@ int main() {
     deadTap.step();
     test::require(deadTap.scene.getRigidBody(deadTap.robot)->velocity.y == 0.f,
                   "space_tap_while_dead_does_not_jump_on_respawn");
+    EventRig restarted(2);
+    const auto serverPlatform = restarted.scene.transform(restarted.world.movingPlatform).position;
+    restarted.events.raise(engine::events::deathEvent{{}, restarted.robot, restarted.world.drone}, 10);
+    restarted.events.run(restarted.scene, 10);
+    restarted.rules.takeLifeEvents();
+    restarted.progress.won = true;
+    restarted.tick = 20;
+    restarted.key(engine::SC::SDL_SCANCODE_R, true);
+    test::require(restarted.rules.alive() && !restarted.progress.won &&
+                      restarted.scene.transform(restarted.robot).position == glm::vec2{360.f, 300.f},
+                  "restart through input works during dead interval without a physics tick");
+    const auto resetNotice = restarted.rules.takeLifeEvents();
+    test::require(resetNotice.size() == 1 && resetNotice[0].revision == 3 &&
+                      resetNotice[0].kind == robotNet::LifeKind::Spawn &&
+                      restarted.scene.transform(restarted.world.movingPlatform).position == serverPlatform,
+                  "client restart publishes only spawn and preserves server-owned world");
+    restarted.scene.transform(restarted.robot).position = {700.f, 500.f};
+    restarted.events.run(restarted.scene, 70);
+    test::require(restarted.scene.transform(restarted.robot).position == glm::vec2{700.f, 500.f} &&
+                      restarted.rules.takeLifeEvents().empty(),
+                  "old delayed respawn cannot teleport restarted robot");
+    EventRig owned(0, true);
+    const auto initialPlatform = owned.scene.transform(owned.world.movingPlatform).position;
+    const auto initialDrone = owned.scene.transform(owned.world.drone).position;
+    factory::advanceWorld(owned.scene, 0.5f);
+    test::require(owned.scene.transform(owned.world.movingPlatform).position != initialPlatform,
+                  "offline restart fixture advances the owned world");
+    owned.progress.won = true;
+    owned.key(engine::SC::SDL_SCANCODE_R, true);
+    test::require(!owned.progress.won && owned.rules.alive() &&
+                      owned.scene.transform(owned.world.movingPlatform).position == initialPlatform &&
+                      owned.scene.transform(owned.world.drone).position == initialDrone,
+                  "offline restart resets its owned world");
     std::cout << "event lifecycle checks passed\n";
   });
 }

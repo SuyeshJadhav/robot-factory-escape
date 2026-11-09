@@ -19,6 +19,8 @@ GameEvents::GameEvents(engine::events::eventManager& events, const World& world,
         if (e.pressed && e.key == engine::SC::SDL_SCANCODE_SPACE && alive_ && !blocked_ &&
             !progress_.won)
           jumpRequested_ = true;
+        if (e.pressed && e.key == engine::SC::SDL_SCANCODE_R && !blocked_)
+          events_.raise(RestartEvent{}, events_.now(), -30);
         if (controls_)
           controls_(e);
       });
@@ -43,6 +45,16 @@ GameEvents::GameEvents(engine::events::eventManager& events, const World& world,
       [this](const RespawnDue& e, engine::Scene&) {
         if (e.generation == generation_ && !alive_)
           events_.raise(engine::events::spawnEvent{{}, robot_, owner_, {}}, events_.now());
+      });
+  events_.subscribe<RestartEvent>(
+      [this](const RestartEvent&, engine::Scene& scene) {
+        ++generation_;
+        jumpRequested_ = false;
+        progress_.won = false;
+        if (ownsWorld_)
+          resetWorld(scene);
+        alive_ = false;
+        events_.raise(engine::events::spawnEvent{{}, robot_, owner_, {}}, events_.now());
       });
 }
 

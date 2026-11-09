@@ -14,6 +14,7 @@ namespace factory {
 struct RespawnDue : engine::events::simpleEvent {
   std::uint64_t generation = 0;
 };
+struct RestartEvent : engine::events::simpleEvent {};
 
 class GameEvents {
 public:

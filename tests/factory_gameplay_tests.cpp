@@ -1,5 +1,6 @@
 #include "test_support.hpp"
 #include <robot_factory_escape/gameplay/factory_gameplay.hpp>
+#include <robot_factory_escape/gameplay/game_events.hpp>
 
 namespace {
 void offlineTickAdvancesAndCarries() {
@@ -75,6 +76,11 @@ int main() {
     GameProgress progress;
     bool grounded = true;
     factory::assignSpawn(scene, w, robot, 2);
+    engine::events::eventManager events;
+    factory::GameEvents rules(events, w, robot, 2, false, grounded, progress);
+    rules.start(scene, 0);
+    engine::KeyboardState noKeys, restartKey;
+    restartKey.setKey(engine::SC::SDL_SCANCODE_R, true);
     scene.transform(robot).position = {2100.f, 1000.f};
     scene.getRigidBody(robot)->velocity = {100.f, 100.f};
     engine::EntityId contact = 0;
@@ -113,7 +119,7 @@ int main() {
     const auto drone = scene.transform(w.drone).position;
     scene.getRigidBody(robot)->velocity = {100.f, 150.f};
     grounded = true;
-    factory::restartPlayer(scene, robot, grounded, progress, false);
+    rules.input(scene, restartKey, noKeys, 10);
     test::require(!progress.won && !grounded &&
                       scene.getRigidBody(robot)->velocity == glm::vec2{0.f, 0.f} &&
                       scene.transform(robot).position == glm::vec2{360.f, 300.f},
@@ -121,16 +127,14 @@ int main() {
     test::require(scene.transform(w.movingPlatform).position == platform &&
                       scene.transform(w.drone).position == drone,
                   "network restart leaves world alone");
-    factory::restartPlayer(scene, robot, grounded, progress, true);
-    test::require(scene.transform(w.movingPlatform).position.x == 330.f &&
-                      test::near(scene.transform(w.drone).position.x, 1260.f),
-                  "offline restart rewinds");
+
     scene.transform(robot).position = {3000.f, 410.f};
     result = factory::tickPlayer(scene, physics, w, robot, grounded, progress, 1.f / 120.f, false);
     test::require(result == factory::TickResult::Won && progress.won &&
                       scene.getRigidBody(robot)->velocity == glm::vec2{0.f, 0.f},
                   "production path can win again after restart");
-    factory::restartPlayer(scene, robot, grounded, progress, false);
+    rules.input(scene, noKeys, restartKey, 11);
+    rules.input(scene, restartKey, noKeys, 12);
     const auto zeroPosition = scene.transform(robot).position;
     factory::tickPlayer(scene, physics, w, robot, grounded, progress, 0.f, true);
     test::require(scene.transform(robot).position == zeroPosition, "zero delta does not move");
