@@ -91,4 +91,25 @@ int main() {
                         paused.scene.transform(paused.world.solids.front()).position.x + 5.f,
                 "queued input is processed without a physics tick");
   std::cout << "event input checks passed\n";
+
+  engine::Scene scene;
+  const auto world = factory::createWorld(scene);
+  const auto robot = factory::createPlayer(scene, world);
+  bool grounded = false;
+  GameProgress progress;
+  engine::events::eventManager events;
+  bool controlOwnedScene = false;
+  factory::GameEvents controls(events, world, robot, 0, true, grounded, progress,
+      [&](const engine::events::inputEvent& e, engine::Scene& ownedScene) {
+        if (e.pressed && e.key == SDL_SCANCODE_T) {
+          controlOwnedScene = &ownedScene == &scene;
+          ownedScene.transform(robot).scale = {2.f, 2.f};
+        }
+      });
+  controls.start(scene, 0);
+  engine::KeyboardState now, previous;
+  now.setKey(SDL_SCANCODE_T, true);
+  controls.input(scene, now, previous, 0);
+  test::require(controlOwnedScene && scene.transform(robot).scale == glm::vec2{2.f, 2.f},
+                "control events update the current owned Scene without a physics tick");
 }

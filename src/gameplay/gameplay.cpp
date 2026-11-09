@@ -13,40 +13,16 @@ void Game::restart(engine::Scene &scene) {
   engine::log::info("Restarted. Reach the exit!");
 }
 
-void Game::handleInput(engine::Scene &scene, const engine::KeyboardState &keyboard) {
-
-  const bool jumpKeyIsPressed = keyboard.isKeyPressed(engine::SC::SDL_SCANCODE_SPACE);
-  const bool jumpPressed = jumpKeyIsPressed && !jumpKeyWasPressed_;
-  jumpKeyWasPressed_ = jumpKeyIsPressed;
-  if (progress_.won)
-    return;
-
-  const bool moveLeft = keyboard.isKeyPressed(engine::SC::SDL_SCANCODE_A) ||
-                        keyboard.isKeyPressed(engine::SC::SDL_SCANCODE_LEFT);
-  const bool moveRight = keyboard.isKeyPressed(engine::SC::SDL_SCANCODE_D) ||
-                         keyboard.isKeyPressed(engine::SC::SDL_SCANCODE_RIGHT);
-  const float direction = static_cast<float>(moveRight) - static_cast<float>(moveLeft);
-  // Input sets speed; physics applies elapsed time and changes position.
-  scene.getRigidBody(robot_)->velocity.x = direction * gameSettings::robotSpeed;
-  // A server platform may have moved away during pause; do not allow a stale
-  // grounded flag to grant a midair jump on the first resumed tick.
-  grounded_ = playerIsSupported(scene, robot_, world_.solids);
-  jumpIfGrounded(*scene.getRigidBody(robot_), grounded_, jumpPressed);
-}
-
 void Game::update(engine::Scene &scene, float deltaSeconds) {
-  if (progress_.won) return;
-  const auto result = factory::tickPlayer(scene,physics_,world_,robot_,grounded_,progress_,
-                                          deltaSeconds,!clientSession_ && !peerSession_);
+  const bool wasAlive = rules_->alive();
+  const auto result = rules_->step(scene, physics_, lastSimulationTick_, deltaSeconds);
+  if (!wasAlive && rules_->alive())
+    sprites_.reset(scene, robot_, world_.drone);
   switch (result) {
   case factory::TickResult::DroneHit:
-    factory::respawnPlayer(scene,robot_,grounded_);
-    sprites_.reset(scene,robot_,world_.drone);
     setStatusText(scene,"STATUS: DRONE HIT - TRY AGAIN");
     break;
   case factory::TickResult::DeathZone:
-    factory::respawnPlayer(scene,robot_,grounded_);
-    sprites_.reset(scene,robot_,world_.drone);
     setStatusText(scene,"STATUS: DEATH ZONE - BACK TO SPAWN");
     break;
   case factory::TickResult::Won:
@@ -56,7 +32,8 @@ void Game::update(engine::Scene &scene, float deltaSeconds) {
   case factory::TickResult::None:
     break;
   }
-  sprites_.update(scene,robot_,grounded_,progress_.won,deltaSeconds);
+  if (rules_->alive())
+    sprites_.update(scene,robot_,grounded_,progress_.won,deltaSeconds);
 }
 
 void Game::setStatusText(engine::Scene &scene, std::string message) {

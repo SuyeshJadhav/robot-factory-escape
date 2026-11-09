@@ -32,7 +32,7 @@ private:
   void createLevel();
   void restart(engine::Scene &scene);
   void connectNetwork(const NetworkOptions &network);
-  void handleInput(engine::Scene &scene, const engine::KeyboardState &keyboard);
+  void handleControls(engine::Scene&, const engine::events::inputEvent&);
   void update(engine::Scene &scene, float deltaSeconds);
   void drawExit();
   void render();
@@ -49,7 +49,6 @@ private:
   engine::Timeline realTime_;
   engine::Timeline gameTime_{realTime_, 60};
 
-
   engine::EntityId robot_{};
   factory::World world_;
   engine::EntityId statusText_{};
@@ -59,7 +58,7 @@ private:
   engine::TextureId backdropTexture_{};
   GameSprites sprites_;
 
-  bool jumpKeyWasPressed_ = false;
+
   bool grounded_ = false;
   GameProgress progress_;
   engine::events::eventManager events_;

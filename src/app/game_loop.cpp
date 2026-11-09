@@ -6,13 +6,44 @@
 #include <cmath>
 #include <thread>
 
+void Game::handleControls(engine::Scene& scene, const engine::events::inputEvent& e) {
+  if (!e.pressed)
+    return;
+  using namespace engine::SC;
+  if (e.key == SDL_SCANCODE_R) {
+    renderedWon_.store(false);
+    setStatusText(scene, "STATUS: AVOID THE PATROL DRONE");
+    engine::log::info("Restarted. Reach the exit!");
+    return;
+  }
+  if (e.key == SDL_SCANCODE_T) {
+    if (gameTime_.paused())
+      gameTime_.unpause();
+    else
+      gameTime_.pause();
+    engine::log::info("Local simulation {}", gameTime_.paused() ? "paused" : "resumed");
+  } else {
+    const float speed = e.key == SDL_SCANCODE_1 ? 0.5f :
+                        e.key == SDL_SCANCODE_2 ? 1.f :
+                        e.key == SDL_SCANCODE_3 ? 2.f : 0.f;
+    if (speed == 0.f)
+      return;
+    gameTime_.setSpeedMultiplier(speed);
+  }
+  scene.getText(timeText_)->val = std::string("TIME: ") +
+      (gameTime_.paused() ? "PAUSED " : "RUNNING ") + speedLabel(gameTime_.speedMultiplier());
+}
+
 void Game::run() {
   rules_ = std::make_unique<factory::GameEvents>(events_, world_, robot_, localClientId_,
                                                 !clientSession_ && !peerSession_,
-                                                grounded_, progress_);
+                                                grounded_, progress_,
+      [this](const engine::events::inputEvent& e, engine::Scene& scene) {
+        handleControls(scene, e);
+      });
   simulation_ = std::make_unique<engine::SimulationThread>(scene_, gameTime_,
                                                            [this](const engine::TickContext &ctx) {
-                                                             handleInput(ctx.scene, ctx.keyboard);
+                                                             lastSimulationTick_ = ctx.tick;
                                                              update(ctx.scene, ctx.dt);
                                                              if (clientSession_ || peerSession_)
                                                                publishRobot(ctx.scene, ctx.tick);
@@ -31,40 +62,19 @@ void Game::run() {
       window_.pollEvents();
       const auto keyboard = engine::KeyboardState::capture(input_);
       simulation_->submitKeyboard(keyboard);
+      simulation_->post([this, keyboard, previous](engine::Scene& scene, engine::Timeline&) {
+        const auto revision = rules_->revision();
+        rules_->input(scene, keyboard, previous, lastSimulationTick_);
+        if (rules_->revision() != revision && rules_->alive()) {
+          sprites_.reset(scene, robot_, world_.drone);
+          if (clientSession_ || peerSession_)
+            publishRobot(scene, lastSimulationTick_);
+        }
+      });
       using namespace engine::SC;
-      if (keyboard.justPressed(SDL_SCANCODE_T, previous)) {
-        simulation_->post([this](engine::Scene &scene, engine::Timeline &time) {
-          if (time.paused())
-            time.unpause();
-          else
-            time.pause();
-          scene.getText(timeText_)->val = std::string("TIME: ") +
-                                          (time.paused() ? "PAUSED " : "RUNNING ") +
-                                          speedLabel(time.speedMultiplier());
-          engine::log::info("Local simulation {}", time.paused() ? "paused" : "resumed");
-        });
-      }
-      const float requestedSpeed = keyboard.justPressed(SDL_SCANCODE_1, previous)   ? 0.5f
-                                   : keyboard.justPressed(SDL_SCANCODE_2, previous) ? 1.f
-                                   : keyboard.justPressed(SDL_SCANCODE_3, previous) ? 2.f
-                                                                                    : 0.f;
-      if (requestedSpeed > 0.f) {
-        simulation_->post([this, requestedSpeed](engine::Scene &scene, engine::Timeline &time) {
-          time.setSpeedMultiplier(requestedSpeed);
-          scene.getText(timeText_)->val = std::string("TIME: ") +
-                                          (time.paused() ? "PAUSED " : "RUNNING ") +
-                                          speedLabel(requestedSpeed);
-        });
-      }
       if (keyboard.justPressed(SDL_SCANCODE_P, previous))
         renderer_.toggleScalingMode();
-      if (keyboard.justPressed(SDL_SCANCODE_R, previous)) {
-        simulation_->post([this](engine::Scene &scene, engine::Timeline &time) {
-          restart(scene);
-          if (clientSession_ || peerSession_)
-            publishRobot(scene, time.now());
-        });
-      }
+
       previous = keyboard;
 
       if (clientSession_ || peerSession_) {

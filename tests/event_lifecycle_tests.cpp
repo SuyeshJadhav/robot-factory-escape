@@ -157,5 +157,17 @@ int main() {
                       owned.scene.transform(owned.world.drone).position == initialDrone,
                   "offline restart resets its owned world");
     std::cout << "event lifecycle checks passed\n";
+    EventRig exit;
+    exit.scene.transform(exit.robot).position = {3000.f, 410.f};
+    test::require(exit.step() == factory::TickResult::Won && exit.progress.won,
+                  "exit_transition_returns_won_once");
+    const auto wonPosition = exit.scene.transform(exit.robot).position;
+    test::require(exit.step() == factory::TickResult::None &&
+                      exit.scene.transform(exit.robot).position == wonPosition,
+                  "completed game ticks return none and remain frozen");
+    EventRig blocked;
+    blocked.rules.setGameplayBlocked(true);
+    test::require(blocked.step() == factory::TickResult::None,
+                  "blocked_or_dead_tick_returns_none");
   });
 }

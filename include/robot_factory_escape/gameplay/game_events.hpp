@@ -18,7 +18,7 @@ struct RestartEvent : engine::events::simpleEvent {};
 
 class GameEvents {
 public:
-  using Controls = std::function<void(const engine::events::inputEvent&)>;
+  using Controls = std::function<void(const engine::events::inputEvent&, engine::Scene&)>;
   GameEvents(engine::events::eventManager&, const World&, engine::EntityId robot,
              engine::ClientId owner, bool ownsWorld, bool& grounded,
              GameProgress&, Controls controls = {});

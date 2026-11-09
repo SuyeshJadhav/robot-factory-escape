@@ -14,7 +14,7 @@ GameEvents::GameEvents(engine::events::eventManager& events, const World& world,
     : events_(events), world_(world), robot_(robot), owner_(owner), ownsWorld_(ownsWorld),
       grounded_(grounded), progress_(progress), controls_(std::move(controls)) {
   events_.subscribe<engine::events::inputEvent>(
-      [this](const engine::events::inputEvent& e, engine::Scene&) {
+      [this](const engine::events::inputEvent& e, engine::Scene& scene) {
         held_.setKey(e.key, e.pressed);
         if (e.pressed && e.key == engine::SC::SDL_SCANCODE_SPACE && alive_ && !blocked_ &&
             !progress_.won)
@@ -22,7 +22,7 @@ GameEvents::GameEvents(engine::events::eventManager& events, const World& world,
         if (e.pressed && e.key == engine::SC::SDL_SCANCODE_R && !blocked_)
           events_.raise(RestartEvent{}, events_.now(), -30);
         if (controls_)
-          controls_(e);
+          controls_(e, scene);
       });
   events_.subscribe<engine::events::spawnEvent>(
       [this](const engine::events::spawnEvent& e, engine::Scene& scene) {
