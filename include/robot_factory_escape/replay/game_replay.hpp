@@ -3,9 +3,11 @@
 #include <engine/renderer.hpp>
 #include <engine/replay/replayRecorder.hpp>
 #include <engine/events/eventManager.hpp>
+#include <engine/events/commonEvents.hpp>
 #include <robot_factory_escape/gameplay/factory_world.hpp>
 
 #include <optional>
+#include <string>
 
 namespace factory {
 
@@ -23,6 +25,7 @@ public:
   ReplaySession& operator=(const ReplaySession&) = delete;
   bool recording() const noexcept { return recording_; }
   bool playing() const noexcept { return recorder_.playing(); }
+  std::optional<std::string> input(const engine::events::inputEvent&, bool alive, bool paused);
   const engine::Scene* update(const engine::Scene&, const World&, engine::EntityId robot,
                               bool won, std::int64_t tick);
 

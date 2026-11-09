@@ -44,6 +44,42 @@ ReplaySession::ReplaySession(engine::events::eventManager& events, engine::FontI
   });
 }
 
+std::optional<std::string> ReplaySession::input(const engine::events::inputEvent& event,
+                                                bool alive, bool paused) {
+  if (!event.pressed)
+    return std::nullopt;
+  using namespace engine::SC;
+  if (event.key == SDL_SCANCODE_F5) {
+    if (playing())
+      return "STATUS: STOP REPLAY BEFORE RECORDING";
+    if (recording_)
+      events_.raise(engine::events::replayRecordStop{}, events_.now(), -40);
+    else
+      events_.raise(engine::events::replayRecordStart{}, events_.now(), -40);
+    return recording_ ? "STATUS: RECORDING STOPPED - F6 TO REPLAY" : "STATUS: RECORDING - F5 TO STOP";
+  }
+  if (event.key == SDL_SCANCODE_F6) {
+    if (playing()) {
+      events_.raise(engine::events::replayPlayStop{}, events_.now(), -40);
+      return "STATUS: LIVE GAMEPLAY";
+    }
+    if (!alive)
+      return "STATUS: RESPAWN BEFORE REPLAYING";
+    if (paused)
+      return "STATUS: UNPAUSE BEFORE REPLAYING";
+    if (recorder_.empty())
+      return "STATUS: NO RECORDING - F5 TO RECORD";
+    events_.raise(engine::events::replayPlayStart{}, events_.now(), -40);
+    return "STATUS: REPLAY - ESC TO RETURN";
+  }
+  if ((event.key == SDL_SCANCODE_ESCAPE || event.key == SDL_SCANCODE_R) && playing()) {
+    events_.raise(engine::events::replayPlayStop{}, events_.now(), -40);
+    if (event.key == SDL_SCANCODE_ESCAPE)
+      return "STATUS: LIVE GAMEPLAY";
+  }
+  return std::nullopt;
+}
+
 const engine::Scene* ReplaySession::update(const engine::Scene& live, const World& world,
                                            engine::EntityId robot, bool won, std::int64_t tick) {
   if (recording_)

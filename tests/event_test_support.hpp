@@ -17,8 +17,9 @@ struct EventRig {
   std::int64_t tick = 0;
   std::vector<robotNet::LifeEvent> initialNotices;
 
-  explicit EventRig(engine::ClientId owner = 1, bool ownsWorld = false)
-      : rules(events, world, robot, owner, ownsWorld, grounded, progress) {
+  explicit EventRig(engine::ClientId owner = 1, bool ownsWorld = false,
+                     factory::GameEvents::Controls controls = {})
+      : rules(events, world, robot, owner, ownsWorld, grounded, progress, std::move(controls)) {
     factory::assignSpawn(scene, world, robot, owner);
     rules.start(scene, tick);
     initialNotices = rules.takeLifeEvents();

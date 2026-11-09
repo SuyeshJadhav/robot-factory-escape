@@ -13,7 +13,8 @@ void Game::createLevel() {
   const auto platformTexture =
       renderer_.loadTexture(assetDir + "platform/cyberpunk_platform_antigravcart_idle.png");
 
-  const auto hudFont = renderer_.loadFont(GAME_FONT_PATH, 24.f);
+  hudFont_ = renderer_.loadFont(GAME_FONT_PATH, 24.f);
+  const auto hudFont = hudFont_;
   const auto titleFont = renderer_.loadFont(GAME_FONT_PATH, 34.f);
   const auto createText = [this](glm::vec2 position, std::string value, engine::FontId font,
                                  engine::Color color) {

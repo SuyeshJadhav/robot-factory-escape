@@ -1,4 +1,5 @@
 #include "test_support.hpp"
+#include "event_replay_support.hpp"
 #include <robot_factory_escape/replay/game_replay.hpp>
 #include <engine/events/commonEvents.hpp>
 #include <engine/events/eventManager.hpp>
@@ -70,8 +71,55 @@ void playbackIsolationAndVisibility() {
                 "playback never mutates live transforms, motion, artwork, or entity collection");
 }
 
+void manualReplayControls() {
+  using namespace engine::SC;
+  ReplayRig held;
+  held.key(SDL_SCANCODE_F5, true);
+  held.key(SDL_SCANCODE_F5, true);
+  test::require(held.replay->recording(), "held F5 does not retrigger recording");
+  held.key(SDL_SCANCODE_F5, false);
+  held.tap(SDL_SCANCODE_F5);
+  test::require(!held.replay->recording(), "fresh F5 press toggles record stop");
+  ReplayRig empty;
+  empty.tap(SDL_SCANCODE_F6);
+  test::require(!empty.replay->playing() && empty.status.find("NO RECORDING") != std::string::npos,
+                "empty F6 is harmless and explains why playback did not start");
+  ReplayRig controls;
+  controls.recordTwoFrames();
+  controls.key(SDL_SCANCODE_F6, true);
+  controls.key(SDL_SCANCODE_F6, true);
+  test::require(controls.replay->playing(), "held F6 does not immediately stop playback");
+  controls.key(SDL_SCANCODE_F6, false);
+  controls.tap(SDL_SCANCODE_F5);
+  test::require(controls.replay->playing() && !controls.replay->recording() &&
+                    controls.status.find("STOP REPLAY") != std::string::npos,
+                "F5 during playback is rejected without replacing the recording");
+  controls.gameplay.progress.won = true;
+  controls.tap(SDL_SCANCODE_R);
+  test::require(!controls.replay->playing() && controls.gameplay.rules.alive() &&
+                    !controls.gameplay.progress.won,
+                "R stops replay and routes restart through the input lifecycle path");
+  controls.gameplay.events.raise(engine::events::deathEvent{{}, controls.gameplay.robot, 0}, 2);
+  controls.gameplay.events.run(controls.gameplay.scene, 2);
+  controls.tap(SDL_SCANCODE_F6);
+  test::require(!controls.replay->playing() &&
+                    controls.status.find("RESPAWN") != std::string::npos,
+                "F6 while dead is rejected with a readable status");
+  controls.tap(SDL_SCANCODE_R);
+  controls.paused = true;
+  controls.tap(SDL_SCANCODE_F6);
+  test::require(!controls.replay->playing() &&
+                    controls.status.find("UNPAUSE") != std::string::npos,
+                "F6 while Timeline paused is rejected");
+  controls.paused = false;
+  controls.tap(SDL_SCANCODE_F6);
+  controls.tap(SDL_SCANCODE_ESCAPE);
+  test::require(!controls.replay->playing(), "Escape stops playback");
+}
+
 int main() {
   return test::run([] {
+    manualReplayControls();
     playbackIsolationAndVisibility();
     engine::Scene live;
     const auto world = factory::createWorld(live);

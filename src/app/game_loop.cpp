@@ -9,6 +9,10 @@
 void Game::handleControls(engine::Scene& scene, const engine::events::inputEvent& e) {
   if (!e.pressed)
     return;
+  if (const auto status = replays_->input(e, rules_->alive(), gameTime_.paused())) {
+    setStatusText(scene, *status);
+    return;
+  }
   using namespace engine::SC;
   if (e.key == SDL_SCANCODE_R) {
     renderedWon_.store(false);
@@ -35,6 +39,7 @@ void Game::handleControls(engine::Scene& scene, const engine::events::inputEvent
 }
 
 void Game::run() {
+  replays_ = std::make_unique<factory::ReplaySession>(events_, hudFont_);
   rules_ = std::make_unique<factory::GameEvents>(events_, world_, robot_, localClientId_,
                                                 !clientSession_ && !peerSession_,
                                                 grounded_, progress_,

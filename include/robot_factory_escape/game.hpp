@@ -7,6 +7,7 @@
 #include <robot_factory_escape/gameplay/game_progress.hpp>
 #include <robot_factory_escape/graphics/game_sprites.hpp>
 #include <robot_factory_escape/networking/network_state.hpp>
+#include <robot_factory_escape/replay/game_replay.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -58,12 +59,14 @@ private:
   engine::EntityId timeText_{};
   engine::EntityId fpsText_{};
   engine::TextureId backdropTexture_{};
+  engine::FontId hudFont_{};
   GameSprites sprites_;
 
   bool grounded_ = false;
   GameProgress progress_;
   engine::events::eventManager events_;
   std::unique_ptr<factory::GameEvents> rules_;
+  std::unique_ptr<factory::ReplaySession> replays_;
   std::int64_t lastSimulationTick_ = 0;
   std::atomic<bool> renderedWon_{false};
   std::unique_ptr<engine::networking::sessionClient> clientSession_;
