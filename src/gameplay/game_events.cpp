@@ -15,6 +15,9 @@ GameEvents::GameEvents(engine::events::eventManager& events, const World& world,
   events_.subscribe<engine::events::inputEvent>(
       [this](const engine::events::inputEvent& e, engine::Scene&) {
         held_.setKey(e.key, e.pressed);
+        if (e.pressed && e.key == engine::SC::SDL_SCANCODE_SPACE && alive_ && !blocked_ &&
+            !progress_.won)
+          jumpRequested_ = true;
         if (controls_)
           controls_(e);
       });
@@ -41,6 +44,7 @@ void GameEvents::spawn(engine::Scene& scene) {
   if (animation_)
     scene.addSpriteAnimation(robot_, *animation_);
   alive_ = true;
+  jumpRequested_ = false;
   ++revision_;
   robotNet::LifeEvent notice;
   notice.entity = robotNet::robotId(owner_);
@@ -56,16 +60,27 @@ void GameEvents::input(engine::Scene& scene, const engine::KeyboardState& now,
   events_.run(scene, tick);
 }
 
+void GameEvents::setGameplayBlocked(bool blocked) noexcept {
+  if (blocked_ != blocked)
+    jumpRequested_ = false;
+  blocked_ = blocked;
+}
+
 TickResult GameEvents::step(engine::Scene& scene, engine::PhysicsSystem& physics,
                             std::int64_t tick, float dt) {
   events_.run(scene, tick);
-  if (!alive_ || progress_.won)
+  if (blocked_ || !alive_ || progress_.won) {
+    jumpRequested_ = false;
     return TickResult::None;
+  }
   using namespace engine::SC;
   const bool left = held_.isKeyPressed(SDL_SCANCODE_A) || held_.isKeyPressed(SDL_SCANCODE_LEFT);
   const bool right = held_.isKeyPressed(SDL_SCANCODE_D) || held_.isKeyPressed(SDL_SCANCODE_RIGHT);
   scene.getRigidBody(robot_)->velocity.x =
       (static_cast<float>(right) - static_cast<float>(left)) * gameSettings::robotSpeed;
+  grounded_ = playerIsSupported(scene, robot_, world_.solids);
+  jumpIfGrounded(*scene.getRigidBody(robot_), grounded_, jumpRequested_);
+  jumpRequested_ = false;
   return tickPlayer(scene, physics, world_, robot_, grounded_, progress_, dt, ownsWorld_);
 }
 

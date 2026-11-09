@@ -24,6 +24,7 @@ public:
   void input(engine::Scene&, const engine::KeyboardState& now,
              const engine::KeyboardState& previous, std::int64_t tick);
   TickResult step(engine::Scene&, engine::PhysicsSystem&, std::int64_t tick, float dt);
+  void setGameplayBlocked(bool blocked) noexcept;
   bool alive() const noexcept { return alive_; }
   std::uint32_t revision() const noexcept { return revision_; }
   std::vector<robotNet::LifeEvent> takeLifeEvents();
@@ -41,6 +42,8 @@ private:
   Controls controls_;
   engine::KeyboardState held_;
   bool alive_ = false;
+  bool blocked_ = false;
+  bool jumpRequested_ = false;
   std::uint32_t revision_ = 0;
   std::optional<engine::Shape> shape_;
   std::optional<engine::SpriteAnimation> animation_;
