@@ -11,6 +11,10 @@
 
 namespace factory {
 
+struct RespawnDue : engine::events::simpleEvent {
+  std::uint64_t generation = 0;
+};
+
 class GameEvents {
 public:
   using Controls = std::function<void(const engine::events::inputEvent&)>;
@@ -31,6 +35,7 @@ public:
 
 private:
   void spawn(engine::Scene&);
+  void die(engine::Scene&);
 
   engine::events::eventManager& events_;
   World world_;
@@ -45,6 +50,7 @@ private:
   bool blocked_ = false;
   bool jumpRequested_ = false;
   std::uint32_t revision_ = 0;
+  std::uint64_t generation_ = 0;
   std::optional<engine::Shape> shape_;
   std::optional<engine::SpriteAnimation> animation_;
   std::vector<robotNet::LifeEvent> outbox_;

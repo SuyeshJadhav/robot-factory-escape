@@ -3,6 +3,7 @@
 #include <robot_factory_escape/gameplay/player_motion.hpp>
 #include <robot_factory_escape/networking/network_state.hpp>
 
+#include <algorithm>
 #include <utility>
 
 namespace factory {
@@ -25,6 +26,18 @@ GameEvents::GameEvents(engine::events::eventManager& events, const World& world,
       [this](const engine::events::spawnEvent& e, engine::Scene& scene) {
         if (!e.remote && e.entity == robot_)
           spawn(scene);
+      });
+  events_.subscribe<engine::events::collisionEvent>(
+      [this](const engine::events::collisionEvent& e, engine::Scene& scene) {
+        const auto other = e.a == robot_ ? e.b : e.b == robot_ ? e.a : 0;
+        if (!e.remote && other != 0 &&
+            (other == world_.drone || scene.has<DeathZone>(other)))
+          events_.raise(engine::events::deathEvent{{}, robot_, other}, events_.now(), -10);
+      });
+  events_.subscribe<engine::events::deathEvent>(
+      [this](const engine::events::deathEvent& e, engine::Scene& scene) {
+        if (!e.remote && e.entity == robot_)
+          die(scene);
       });
 }
 
@@ -60,6 +73,30 @@ void GameEvents::input(engine::Scene& scene, const engine::KeyboardState& now,
   events_.run(scene, tick);
 }
 
+void GameEvents::die(engine::Scene& scene) {
+  if (!alive_)
+    return;
+  if (const auto* shape = scene.getShape(robot_))
+    shape_ = *shape;
+  if (const auto* animation = scene.getSpriteAnimation(robot_))
+    animation_ = *animation;
+  scene.removeShape(robot_);
+  scene.removeSpriteAnimation(robot_);
+  scene.getRigidBody(robot_)->velocity = {0.f, 0.f};
+  grounded_ = false;
+  jumpRequested_ = false;
+  alive_ = false;
+  ++revision_;
+  ++generation_;
+  robotNet::LifeEvent notice;
+  notice.entity = robotNet::robotId(owner_);
+  notice.revision = revision_;
+  notice.kind = robotNet::LifeKind::Death;
+  notice.position = scene.transform(robot_).position;
+  outbox_.push_back(notice);
+  events_.raise(RespawnDue{{}, generation_}, events_.now() + 60);
+}
+
 void GameEvents::setGameplayBlocked(bool blocked) noexcept {
   if (blocked_ != blocked)
     jumpRequested_ = false;
@@ -69,8 +106,14 @@ void GameEvents::setGameplayBlocked(bool blocked) noexcept {
 TickResult GameEvents::step(engine::Scene& scene, engine::PhysicsSystem& physics,
                             std::int64_t tick, float dt) {
   events_.run(scene, tick);
-  if (blocked_ || !alive_ || progress_.won) {
+  if (blocked_ || progress_.won) {
     jumpRequested_ = false;
+    return TickResult::None;
+  }
+  if (!alive_) {
+    jumpRequested_ = false;
+    if (ownsWorld_)
+      advanceWorld(scene, std::clamp(dt, 0.f, 0.1f));
     return TickResult::None;
   }
   using namespace engine::SC;
@@ -81,7 +124,14 @@ TickResult GameEvents::step(engine::Scene& scene, engine::PhysicsSystem& physics
   grounded_ = playerIsSupported(scene, robot_, world_.solids);
   jumpIfGrounded(*scene.getRigidBody(robot_), grounded_, jumpRequested_);
   jumpRequested_ = false;
-  return tickPlayer(scene, physics, world_, robot_, grounded_, progress_, dt, ownsWorld_);
+  engine::EntityId contact = 0;
+  const auto result = tickPlayer(scene, physics, world_, robot_, grounded_, progress_, dt,
+                                  ownsWorld_, &contact);
+  if (result == TickResult::DroneHit || result == TickResult::DeathZone) {
+    events_.raise(engine::events::collisionEvent{{}, robot_, contact}, tick, -20);
+    events_.run(scene, tick);
+  }
+  return result;
 }
 
 std::vector<robotNet::LifeEvent> GameEvents::takeLifeEvents() {
