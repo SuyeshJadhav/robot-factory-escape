@@ -5,15 +5,17 @@
 #include <engine/events/eventManager.hpp>
 #include <engine/networking/sessionClient.hpp>
 #include <engine/networking/sessionServer.hpp>
+#include <engine/networking/peerSession.hpp>
 
 #include <algorithm>
 #include <chrono>
 #include <thread>
+#include <type_traits>
 
 using namespace std::chrono_literals;
 
-struct Endpoint {
-  engine::networking::sessionClient session;
+template <class Session> struct Endpoint {
+  Session session;
   engine::events::eventManager events;
   engine::Scene scene;
   std::vector<robotNet::LifeEvent> received;
@@ -21,7 +23,13 @@ struct Endpoint {
   std::unordered_set<engine::ClientId> departed;
   std::optional<std::int64_t> frozenTick;
 
-  explicit Endpoint(const std::string& address) : session(address) {
+  static Session makeSession(const std::string& address) {
+    if constexpr (std::is_same_v<Session, engine::networking::peerSession>)
+      return Session(address, "127.0.0.1");
+    else
+      return Session(address);
+  }
+  explicit Endpoint(const std::string& address) : session(makeSession(address)) {
     events.subscribe<robotNet::LifeEvent>([this](const auto& event, engine::Scene&) {
       test::require(event.remote && event.from == engine::kServerId,
                     "accepted result carries server transport identity");
@@ -32,7 +40,10 @@ struct Endpoint {
     session.start();
   }
   void poll(std::int64_t tick) {
-    session.requestSnapshot(tick);
+    if constexpr (std::is_same_v<Session, engine::networking::peerSession>)
+      session.publishScene(scene, tick);
+    else
+      session.requestSnapshot(tick);
     tick = frozenTick.value_or(tick);
     events.receive(session.drainMessages(), tick);
     events.run(scene, tick);
@@ -54,16 +65,17 @@ template <class Predicate> void until(Predicate predicate, const char* message) 
   throw std::runtime_error(message);
 }
 
-void eventOnlyLocalLifecycle() {
+template <class Session> void eventOnlyLocalLifecycle() {
   engine::networking::sessionServer server("tcp://127.0.0.1:0");
   engine::Scene serverScene;
   robotNet::LifeServer service(server);
   server.publishScene(serverScene, 0);
   server.start();
   const auto address = "tcp://127.0.0.1:" + std::to_string(server.port());
-  Endpoint a(address), b(address);
+  Endpoint<Session> b(address), a(address); // Exercise player 2's assigned spawn.
   const auto world = factory::createWorld(a.scene);
   const auto local = factory::createPlayer(a.scene, world);
+  factory::assignSpawn(a.scene, world, local, a.session.id());
   a.session.replicator().track(local);
   const auto ownB = b.scene.createEntity();
   b.session.replicator().track(ownB);
@@ -79,11 +91,12 @@ void eventOnlyLocalLifecycle() {
   const auto remote = *b.session.replicator().entityOf(id);
   robotNet::reconcileRemotePose(b.scene, b.session.replicator(), b.lives, id);
   std::int64_t tick = 0;
+  std::vector<Endpoint<Session>*> active{&a, &b};
   const auto pump = [&] {
     ++tick;
     service.pump(serverScene, tick, server.drainRosterEvents());
-    a.poll(tick);
-    b.poll(tick);
+    for (auto* endpoint : active)
+      endpoint->poll(tick);
   };
   test::require(robotNet::publishLifeEvents(a.session, rules.takeLifeEvents(), 0) == 1,
                 "initial spawn produces exactly one send");
@@ -100,6 +113,21 @@ void eventOnlyLocalLifecycle() {
   until([&] { pump(); return b.lives.alive(id) == false; }, "event-only death reaches replica");
   test::require(!b.scene.getShape(remote) && !rules.alive() && rules.revision() == 2 &&
                     !a.lives.alive(id), "remote hides while local echo cannot change local lifecycle");
+  a.session.replicator().setExtra(id, robotNet::encode({0, 0, 0, 2, false}));
+  Endpoint<Session> lateDead(address);
+  const auto lateLocal = lateDead.scene.createEntity();
+  lateDead.session.replicator().track(lateLocal);
+  test::require(lateDead.session.replicator().apply(lateDead.scene,
+      a.session.replicator().encodeOwned(a.scene), a.session.id()),
+      "late join receives current dead repair metadata");
+  robotNet::reconcileRemotePose(lateDead.scene, lateDead.session.replicator(), lateDead.lives, id);
+  active.push_back(&lateDead);
+  until([&] { pump(); return !lateDead.received.empty(); },
+        "late join while dead receives cached death result");
+  const auto lateReplica = *lateDead.session.replicator().entityOf(id);
+  test::require(lateDead.received[0].kind == robotNet::LifeKind::Death &&
+                    lateDead.lives.alive(id) == false && !lateDead.scene.getShape(lateReplica),
+                "late join stays dead instead of inventing a live remote robot");
   a.frozenTick = deathTick + 60;
   a.events.run(a.scene, *a.frozenTick);
   test::require(rules.alive() && rules.revision() == 3, "scheduled local spawn occurs");
@@ -109,27 +137,32 @@ void eventOnlyLocalLifecycle() {
   until([&] { pump(); return b.lives.alive(id) == true; }, "event-only spawn reaches replica");
   test::require(b.scene.getShape(remote) &&
                     b.scene.transform(remote).position == a.scene.transform(local).position &&
+                    a.scene.transform(local).position == glm::vec2{360.f, 300.f} &&
                     b.received.size() == 3,
                 "spawn event restores remote artwork and pose without newer snapshot application");
   const auto metadata = robotNet::decode(*b.session.replicator().extraOf(id));
   test::require(metadata && metadata->lifeRevision == 1,
                 "replica metadata stayed at initial state: lifecycle proof is event-only");
+  until([&] { pump(); return lateDead.lives.alive(id) == true; },
+        "late-joining endpoint also receives respawn");
+  test::require(lateDead.scene.getShape(lateReplica) &&
+                    lateDead.scene.transform(lateReplica).position == glm::vec2{360.f, 300.f},
+                "late join restores owner-assigned spawn through the event channel");
   a.session.leave();
   b.session.leave();
+  lateDead.session.leave();
   server.stop();
 }
 
-int main() {
-  return test::run([] {
-    eventOnlyLocalLifecycle();
+template <class Session> void relaySocketScenario() {
     engine::networking::sessionServer server("tcp://127.0.0.1:0");
     engine::Scene scene;
     robotNet::LifeServer life(server);
     server.publishScene(scene, 0);
     server.start();
     const auto address = "tcp://127.0.0.1:" + std::to_string(server.port());
-    Endpoint a(address), b(address);
-    std::vector<Endpoint*> active{&a, &b};
+    Endpoint<Session> a(address), b(address);
+    std::vector<Endpoint<Session>*> active{&a, &b};
     std::int64_t tick = 0;
     const auto pump = [&] {
       ++tick;
@@ -160,7 +193,7 @@ int main() {
     test::require(b.received.size() == 2 && b.received[1].entity == death.entity &&
                       b.received[1].revision == 3,
                   "forged owner request is rejected without dropping following valid traffic");
-    Endpoint late(address);
+    Endpoint<Session> late(address);
     active.push_back(&late);
     until([&] { pump(); return !late.received.empty(); }, "late join receives cached lifecycle");
     test::require(late.received.size() == 1 && late.received[0].entity == spawn.entity &&
@@ -183,7 +216,7 @@ int main() {
     b.session.send(robotNet::LifeEvent::kType, marker.encode(), tick);
     until([&] { pump(); return b.received.back().entity == marker.entity; },
           "remaining owner publishes departure-check marker");
-    Endpoint afterDeparture(address);
+    Endpoint<Session> afterDeparture(address);
     active.push_back(&afterDeparture);
     until([&] { pump(); return !afterDeparture.received.empty(); },
           "post-departure join receives remaining owner marker");
@@ -193,5 +226,13 @@ int main() {
     for (auto* endpoint : active)
       endpoint->session.leave();
     server.stop();
+}
+
+int main() {
+  return test::run([] {
+    eventOnlyLocalLifecycle<engine::networking::sessionClient>();
+    eventOnlyLocalLifecycle<engine::networking::peerSession>();
+    relaySocketScenario<engine::networking::sessionClient>();
+    relaySocketScenario<engine::networking::peerSession>();
   });
 }
