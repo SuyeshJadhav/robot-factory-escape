@@ -130,4 +130,53 @@ void RemoteLives::forget(engine::ClientId owner) {
   std::erase_if(entries_, [owner](const auto& entry) { return engine::ownerOf(entry.first) == owner; });
 }
 
+bool observeRemoteLife(RemoteLives& cache, const LifeEvent& event, engine::ClientId self,
+                        const std::unordered_set<engine::ClientId>& departed) {
+  const auto owner = engine::ownerOf(event.entity);
+  return event.remote && event.from == engine::kServerId && owner != self &&
+         !departed.contains(owner) && cache.observe(event);
+}
+
+bool reconcileRemotePose(engine::Scene& scene,
+                         const engine::networking::sceneReplicator& replicator,
+                         RemoteLives& cache, engine::NetId id) {
+  const auto entity = replicator.entityOf(id);
+  if (!isRobot(id) || !entity || !scene.hasEntity(*entity))
+    return false;
+  const auto* bytes = replicator.extraOf(id);
+  const auto state = bytes ? decode(*bytes) : std::nullopt;
+  const auto& pose = scene.transform(*entity);
+  if (state && std::isfinite(pose.position.x) && std::isfinite(pose.position.y) &&
+      std::isfinite(pose.scale.x) && std::isfinite(pose.scale.y) &&
+      cache.observeSnapshot(id, state->lifeRevision, state->alive)) {
+    cache.rememberPose(id, pose);
+    return true;
+  }
+  if (const auto accepted = cache.acceptedPose(id))
+    scene.transform(*entity) = *accepted;
+  return false;
+}
+
+bool enforceRemoteLife(engine::Scene& scene, engine::EntityId local,
+                        const engine::networking::sceneReplicator& replicator,
+                        RemoteLives& cache, engine::NetId id, const engine::Shape& fallback) {
+  const auto entity = replicator.entityOf(id);
+  if (!isRobot(id) || !entity || *entity == local || !scene.hasEntity(*entity))
+    return false;
+  makeRemoteVisual(scene, *entity);
+  const auto alive = cache.alive(id);
+  if (alive == false) {
+    scene.removeShape(*entity);
+    scene.removeSpriteAnimation(*entity);
+  } else if (alive == true) {
+    if (!scene.getShape(*entity))
+      scene.addShape(*entity, fallback);
+    if (const auto position = cache.takeSpawnPosition(id)) {
+      scene.transform(*entity).position = *position;
+      cache.rememberPose(id, scene.transform(*entity));
+    }
+  }
+  return alive.has_value();
+}
+
 } // namespace robotNet

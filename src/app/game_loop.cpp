@@ -41,6 +41,10 @@ void Game::run() {
       [this](const engine::events::inputEvent& e, engine::Scene& scene) {
         handleControls(scene, e);
       });
+  events_.subscribe<robotNet::LifeEvent>(
+      [this](const robotNet::LifeEvent& e, engine::Scene&) {
+        robotNet::observeRemoteLife(remoteLives_, e, localClientId_, departedIds_);
+      }, true);
   simulation_ = std::make_unique<engine::SimulationThread>(scene_, gameTime_,
                                                            [this](const engine::TickContext &ctx) {
                                                              lastSimulationTick_ = ctx.tick;

@@ -1,5 +1,6 @@
 #include <robot_factory_escape/game.hpp>
 #include <robot_factory_escape/gameplay/player_motion.hpp>
+#include <robot_factory_escape/gameplay/level_layout.hpp>
 #include <robot_factory_escape/networking/world_binding.hpp>
 
 void Game::connectNetwork(const NetworkOptions &network) {
@@ -46,12 +47,23 @@ void Game::publishRobot(engine::Scene &scene, std::int64_t tick) {
 
 void Game::pumpNetwork(engine::Scene &scene, bool paused) {
   const auto previousPlatform = scene.transform(world_.movingPlatform).position;
+  auto &replicator = peerToPeer_ ? peerSession_->replicator() : clientSession_->replicator();
+  const auto forget = [this](engine::ClientId owner) {
+    departedIds_.insert(owner);
+    remoteIds_.erase(owner);
+    remoteLives_.forget(owner);
+    remoteAnimation_.erase(robotNet::robotId(owner));
+  };
   if (peerToPeer_) {
+    const auto previousIds = remoteIds_;
     peerSession_->applyUpdates(scene);
     remoteIds_.clear();
     for (const auto &client : peerSession_->roster())
       if (client.id != localClientId_)
         remoteIds_.insert(client.id);
+    for (auto owner : previousIds)
+      if (!remoteIds_.contains(owner))
+        forget(owner);
   } else {
     clientSession_->applySnapshot(scene);
     for (const auto &event : clientSession_->drainRosterEvents()) {
@@ -60,38 +72,43 @@ void Game::pumpNetwork(engine::Scene &scene, bool paused) {
       if (event.change == engine::networking::RosterChange::Joined)
         remoteIds_.insert(event.client.id);
       else
-        remoteIds_.erase(event.client.id);
+        forget(event.client.id);
     }
   }
   // Snapshots follow the server clock, independently of the local tick rate.
   // Applying each observed delta here also handles multiple polls per tick.
-  if (!paused && !progress_.won)
+  if (!paused && !progress_.won && rules_->alive())
     carryPlayerWithPlatform(scene, robot_, world_.movingPlatform, previousPlatform, world_.solids, grounded_);
-  auto &replicator = peerToPeer_ ? peerSession_->replicator() : clientSession_->replicator();
-  // A snapshot can arrive before its roster event. Exclude every foreign
-  // robot from physics immediately, even if its visual setup waits one poll.
-  std::vector<engine::EntityId> foreignBodies;
-  for (const auto &[id, body] : scene.rigidBodies()) {
-    if (id == robot_)
+  for (const auto owner : departedIds_)
+    if (replicator.entityOf(robotNet::robotId(owner)))
+      replicator.dropOwner(scene, owner);
+  // A snapshot may precede its roster event: reconcile every materialized robot.
+  std::vector<engine::NetId> foreign;
+  for (const auto &[entity, transform] : scene.transforms()) {
+    if (entity == robot_)
       continue;
-    if (const auto netId = replicator.netIdOf(id);
-        netId && engine::ownerOf(*netId) != engine::kServerId)
-      foreignBodies.push_back(id);
-  }
-  for (const auto id : foreignBodies)
-    robotNet::makeRemoteVisual(scene, id);
-  for (auto id : remoteIds_) {
-    const auto remote = replicator.entityOf(robotNet::robotId(id));
-    if (!remote || !scene.hasEntity(*remote))
+    const auto netId = replicator.netIdOf(entity);
+    if (!netId || engine::ownerOf(*netId) == engine::kServerId ||
+        *netId != robotNet::robotId(engine::ownerOf(*netId)))
       continue;
-    robotNet::makeRemoteVisual(scene, *remote);
-    // The renderer's texture handles are local, so restore the local sprite
-    // clip.
-    if (const auto *bytes = replicator.extraOf(robotNet::robotId(id))) {
-      if (const auto state = robotNet::decode(*bytes))
-        sprites_.applyRemote(scene, *remote, *state);
+    foreign.push_back(*netId);
+    if (robotNet::reconcileRemotePose(scene, replicator, remoteLives_, *netId)) {
+      if (const auto* bytes = replicator.extraOf(*netId))
+        if (const auto state = robotNet::decode(*bytes))
+          remoteAnimation_[*netId] = *state;
     }
-    if (auto *shape = scene.getShape(*remote))
+  }
+  events_.receive(peerToPeer_ ? peerSession_->drainMessages() : clientSession_->drainMessages(),
+                  lastSimulationTick_);
+  events_.run(scene, lastSimulationTick_);
+  const engine::Shape fallback{.size = levelLayout::robotSize, .color = {255, 210, 60, 255}};
+  for (const auto id : foreign) {
+    const auto remote = *replicator.entityOf(id);
+    if (const auto animation = remoteAnimation_.find(id);
+        animation != remoteAnimation_.end() && remoteLives_.alive(id) != false)
+      sprites_.applyRemote(scene, remote, animation->second);
+    robotNet::enforceRemoteLife(scene, robot_, replicator, remoteLives_, id, fallback);
+    if (auto *shape = scene.getShape(remote))
       shape->color = {255, 210, 60, 255};
   }
 }

@@ -3,6 +3,7 @@
 #include <engine/events/simpleEvent.hpp>
 #include <engine/events/eventManager.hpp>
 #include <engine/networking/sessionServer.hpp>
+#include <engine/networking/sceneReplicator.hpp>
 #include <engine/ids.hpp>
 #include <engine/entity.hpp>
 
@@ -12,6 +13,7 @@
 #include <cstdint>
 #include <optional>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <glm/vec2.hpp>
 
@@ -112,5 +114,13 @@ private:
   };
   std::unordered_map<engine::NetId, Entry> entries_;
 };
+
+bool observeRemoteLife(RemoteLives&, const LifeEvent&, engine::ClientId self,
+                        const std::unordered_set<engine::ClientId>& departed);
+bool reconcileRemotePose(engine::Scene&, const engine::networking::sceneReplicator&,
+                         RemoteLives&, engine::NetId);
+bool enforceRemoteLife(engine::Scene&, engine::EntityId local,
+                        const engine::networking::sceneReplicator&, RemoteLives&,
+                        engine::NetId, const engine::Shape& fallback);
 
 } // namespace robotNet

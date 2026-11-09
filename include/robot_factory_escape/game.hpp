@@ -14,6 +14,7 @@
 #include <optional>
 #include <string>
 #include <unordered_set>
+#include <unordered_map>
 #include <vector>
 
 struct NetworkOptions {
@@ -68,6 +69,9 @@ private:
   std::unique_ptr<engine::networking::peerSession> peerSession_;
   engine::ClientId localClientId_ = 0;
   std::unordered_set<engine::ClientId> remoteIds_;
+  std::unordered_set<engine::ClientId> departedIds_;
+  robotNet::RemoteLives remoteLives_;
+  std::unordered_map<engine::NetId, robotNet::AnimationState> remoteAnimation_;
   bool peerToPeer_ = false;
   bool connected_ = true;
   // Stop the worker before destroying anything its callbacks reference.
