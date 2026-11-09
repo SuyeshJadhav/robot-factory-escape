@@ -1,5 +1,6 @@
 #include "test_support.hpp"
 #include <robot_factory_escape/gameplay/game_events.hpp>
+#include <robot_factory_escape/replay/game_replay.hpp>
 #include <robot_factory_escape/networking/life_events.hpp>
 #include <robot_factory_escape/networking/network_state.hpp>
 #include <engine/events/eventManager.hpp>
@@ -228,8 +229,78 @@ template <class Session> void relaySocketScenario() {
     server.stop();
 }
 
+void replayDisplayNeverBecomesPublishedState() {
+  engine::networking::sessionServer server("tcp://127.0.0.1:0");
+  engine::Scene serverScene;
+  server.publishScene(serverScene, 0);
+  server.start();
+  const auto address = "tcp://127.0.0.1:" + std::to_string(server.port());
+  Endpoint<engine::networking::sessionClient> a(address), b(address);
+  engine::Scene live;
+  const auto world = factory::createWorld(live);
+  const auto robot = factory::createPlayer(live, world);
+  const auto id = a.session.replicator().track(robot);
+  a.session.replicator().setExtra(id, robotNet::encode({0, 0, 0, 1, true}));
+  factory::ReplaySession replay(a.events, 0);
+  std::int64_t clock = 0;
+  engine::Timeline source(&clock, 60), time(source, 60);
+  engine::SimulationThread simulation(std::move(live), time, [&](const engine::TickContext& ctx) {
+    if (ctx.tick <= 2)
+      ctx.scene.transform(robot).position = {100.f * static_cast<float>(ctx.tick), 300.f};
+    a.session.submitScene(ctx.scene, ctx.tick);
+    simulation.showScene(replay.update(ctx.scene, world, robot, false, ctx.tick));
+  });
+  simulation.post([&](engine::Scene& scene, engine::Timeline&) {
+    a.events.raise(engine::events::replayRecordStart{}, 0);
+    a.events.run(scene, 0);
+  });
+  simulation.advanceFrame();
+  ++clock;
+  simulation.advanceFrame();
+  ++clock;
+  simulation.advanceFrame();
+  simulation.post([&](engine::Scene& scene, engine::Timeline&) {
+    a.events.raise(engine::events::replayRecordStop{}, 2);
+    a.events.run(scene, 2);
+    scene.transform(robot).position = {700.f, 300.f};
+    scene.getRigidBody(robot)->velocity = {41.f, 42.f};
+    a.events.raise(engine::events::replayPlayStart{}, 2);
+    a.events.run(scene, 2);
+  });
+  simulation.advanceFrame();
+  ++clock;
+  simulation.advanceFrame();
+  const auto frame = simulation.takeRenderFrame();
+  test::require(frame && frame->scene.all<factory::ReplayView>().size() == 1,
+                "SimulationThread copies isolated replay marker into displayed frame");
+  bool recordedPoseDisplayed = false;
+  for (const auto& [entity, shape] : frame->scene.shapes())
+    if (shape.color.r == 72 && frame->scene.transform(entity).position.x == 100.f)
+      recordedPoseDisplayed = true;
+  test::require(recordedPoseDisplayed, "display shows first recorded pose, not live pose");
+  std::int64_t serverTick = 0;
+  until([&] {
+    server.applyClientStates(serverScene);
+    server.publishScene(serverScene, ++serverTick);
+    b.session.requestSnapshot(serverTick);
+    b.session.applySnapshot(b.scene);
+    const auto remote = b.session.replicator().entityOf(id);
+    return remote && b.scene.transform(*remote).position == glm::vec2{700.f, 300.f};
+  }, "networking advances while replay display is held; only live pose is published");
+  simulation.post([&](engine::Scene& scene, engine::Timeline&) {
+    test::require(replay.playing() && scene.transform(robot).position == glm::vec2{700.f, 300.f} &&
+                      scene.getRigidBody(robot)->velocity == glm::vec2{41.f, 42.f},
+                  "display and network pumping do not mutate owned live motion");
+  });
+  simulation.advanceFrame();
+  a.session.leave();
+  b.session.leave();
+  server.stop();
+}
+
 int main() {
   return test::run([] {
+    replayDisplayNeverBecomesPublishedState();
     eventOnlyLocalLifecycle<engine::networking::sessionClient>();
     eventOnlyLocalLifecycle<engine::networking::peerSession>();
     relaySocketScenario<engine::networking::sessionClient>();

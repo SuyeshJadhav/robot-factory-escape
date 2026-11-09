@@ -9,6 +9,10 @@
 void Game::update(engine::Scene &scene, float deltaSeconds) {
   const bool wasAlive = rules_->alive();
   const auto result = rules_->step(scene, physics_, lastSimulationTick_, deltaSeconds);
+  if (replays_->playing()) {
+    publishLifeEvents(lastSimulationTick_);
+    return;
+  }
   if (!wasAlive && rules_->alive())
     sprites_.reset(scene, robot_, world_.drone);
   switch (result) {

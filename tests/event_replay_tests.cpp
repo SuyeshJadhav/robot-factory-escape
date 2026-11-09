@@ -71,6 +71,43 @@ void playbackIsolationAndVisibility() {
                 "playback never mutates live transforms, motion, artwork, or entity collection");
 }
 
+void blockedLifecycleWork() {
+  ReplayRig dead;
+  dead.recordTwoFrames();
+  dead.gameplay.events.raise(engine::events::deathEvent{{}, dead.gameplay.robot, 0}, 3);
+  dead.gameplay.events.run(dead.gameplay.scene, 3);
+  dead.gameplay.rules.takeLifeEvents();
+  // Direct control events also need isolation, even though F6 rejects a dead player.
+  dead.gameplay.events.raise(engine::events::replayPlayStart{}, 4);
+  dead.gameplay.events.run(dead.gameplay.scene, 4);
+  dead.replay->syncGameplay(dead.gameplay.rules);
+  const auto position = dead.gameplay.scene.transform(dead.gameplay.robot).position;
+  dead.gameplay.events.raise(engine::events::spawnEvent{{}, dead.gameplay.robot, 1, {}}, 64);
+  for (std::int64_t tick = 64; tick <= 66; ++tick)
+    dead.gameplay.events.run(dead.gameplay.scene, tick);
+  test::require(!dead.gameplay.rules.alive() && dead.gameplay.rules.revision() == 2 &&
+                    dead.gameplay.scene.transform(dead.gameplay.robot).position == position &&
+                    dead.gameplay.rules.takeLifeEvents().empty(),
+                "network/event pumping during playback cannot execute local delayed spawn work");
+  dead.gameplay.events.raise(engine::events::replayPlayStop{}, 66);
+  dead.gameplay.events.run(dead.gameplay.scene, 66);
+  dead.replay->syncGameplay(dead.gameplay.rules);
+  dead.gameplay.events.run(dead.gameplay.scene, 67);
+  test::require(dead.gameplay.rules.alive() && dead.gameplay.rules.revision() == 3 &&
+                    dead.gameplay.rules.takeLifeEvents().size() == 1,
+                "deferred duplicate spawn work resumes exactly once after playback");
+  ReplayRig alive;
+  alive.recordTwoFrames();
+  alive.tap(engine::SC::SDL_SCANCODE_F6);
+  alive.gameplay.scene.getRigidBody(alive.gameplay.robot)->velocity = {19.f, 23.f};
+  alive.gameplay.events.raise(engine::events::deathEvent{{}, alive.gameplay.robot, 0}, 3);
+  alive.gameplay.events.run(alive.gameplay.scene, 3);
+  test::require(alive.gameplay.rules.alive() && alive.gameplay.rules.revision() == 1 &&
+                    alive.gameplay.scene.getRigidBody(alive.gameplay.robot)->velocity ==
+                        glm::vec2{19.f, 23.f} && alive.gameplay.rules.takeLifeEvents().empty(),
+                "queued local death cannot mutate a frozen live robot during replay");
+}
+
 void replayJumpBoundaries() {
   using namespace engine::SC;
   ReplayRig manual;
@@ -161,6 +198,7 @@ void manualReplayControls() {
 
 int main() {
   return test::run([] {
+    blockedLifecycleWork();
     replayJumpBoundaries();
     manualReplayControls();
     playbackIsolationAndVisibility();

@@ -53,10 +53,13 @@ void Game::run() {
   simulation_ = std::make_unique<engine::SimulationThread>(scene_, gameTime_,
                                                            [this](const engine::TickContext &ctx) {
                                                              lastSimulationTick_ = ctx.tick;
+                                                             events_.run(ctx.scene, ctx.tick);
                                                              replays_->syncGameplay(*rules_);
                                                              update(ctx.scene, ctx.dt);
                                                              if (clientSession_ || peerSession_)
                                                                publishRobot(ctx.scene, ctx.tick);
+                                                             replays_->update(ctx.scene, world_, robot_, progress_.won, ctx.tick);
+                                                             replays_->syncGameplay(*rules_);
                                                            });
   rules_->postStart(*simulation_);
   simulation_->post([this](engine::Scene& scene, engine::Timeline&) {
@@ -96,7 +99,7 @@ void Game::run() {
 
       if (clientSession_ || peerSession_) {
         simulation_->post([this](engine::Scene &scene, engine::Timeline &time) {
-          pumpNetwork(scene, time.paused());
+          pumpNetwork(scene, time.paused() || replays_->playing());
           // Rendering continues on wall time when the local Timeline stops.
           // Keep fetching shared state at that cadence instead of falling
           // back to 100/250 ms heartbeat updates (10/4 visible updates/sec).

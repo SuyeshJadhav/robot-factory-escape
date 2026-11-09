@@ -28,8 +28,12 @@ GameEvents::GameEvents(engine::events::eventManager& events, const World& world,
       });
   events_.subscribe<engine::events::spawnEvent>(
       [this](const engine::events::spawnEvent& e, engine::Scene& scene) {
-        if (!e.remote && e.entity == robot_)
-          spawn(scene);
+        if (!e.remote && e.entity == robot_) {
+          if (blocked_)
+            events_.raise(e, events_.now() + 1, e.priority);
+          else
+            spawn(scene);
+        }
       });
   events_.subscribe<engine::events::collisionEvent>(
       [this](const engine::events::collisionEvent& e, engine::Scene& scene) {
@@ -40,13 +44,21 @@ GameEvents::GameEvents(engine::events::eventManager& events, const World& world,
       });
   events_.subscribe<engine::events::deathEvent>(
       [this](const engine::events::deathEvent& e, engine::Scene& scene) {
-        if (!e.remote && e.entity == robot_)
-          die(scene);
+        if (!e.remote && e.entity == robot_) {
+          if (blocked_)
+            events_.raise(e, events_.now() + 1, e.priority);
+          else
+            die(scene);
+        }
       });
   events_.subscribe<RespawnDue>(
       [this](const RespawnDue& e, engine::Scene&) {
-        if (e.generation == generation_ && !alive_)
-          events_.raise(engine::events::spawnEvent{{}, robot_, owner_, {}}, events_.now());
+        if (e.generation == generation_ && !alive_) {
+          if (blocked_)
+            events_.raise(e, events_.now() + 1, e.priority);
+          else
+            events_.raise(engine::events::spawnEvent{{}, robot_, owner_, {}}, events_.now());
+        }
       });
   events_.subscribe<RestartEvent>(
       [this](const RestartEvent&, engine::Scene& scene) {
