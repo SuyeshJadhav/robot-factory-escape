@@ -71,6 +71,24 @@ void playbackIsolationAndVisibility() {
                 "playback never mutates live transforms, motion, artwork, or entity collection");
 }
 
+void naturalCompletionReportsOnce() {
+  ReplayRig rig;
+  rig.recordTwoFrames();
+  test::require(!rig.replay->takeNaturalEnd(), "no end is reported before playback");
+  rig.tap(engine::SC::SDL_SCANCODE_F6);
+  for (int i = 0; i < 6 && rig.replay->playing(); ++i)
+    rig.playbackFrame();
+  test::require(!rig.replay->playing() && rig.replay->takeNaturalEnd() &&
+                    !rig.replay->takeNaturalEnd(),
+                "running out of samples is reported exactly once for the live HUD");
+  rig.tap(engine::SC::SDL_SCANCODE_F6);
+  rig.playbackFrame();
+  rig.tap(engine::SC::SDL_SCANCODE_ESCAPE);
+  rig.playbackFrame();
+  test::require(!rig.replay->playing() && !rig.replay->takeNaturalEnd(),
+                "manual stop is not reported as natural end (it already writes LIVE GAMEPLAY)");
+}
+
 void replayControlFeedback() {
   ReplayRig rig;
   rig.recordTwoFrames();
@@ -216,6 +234,7 @@ void manualReplayControls() {
 
 int main() {
   return test::run([] {
+    naturalCompletionReportsOnce();
     replayControlFeedback();
     blockedLifecycleWork();
     replayJumpBoundaries();

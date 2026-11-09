@@ -59,6 +59,8 @@ void Game::run() {
                                                              if (clientSession_ || peerSession_)
                                                                publishRobot(ctx.scene, ctx.tick);
                                                              const auto* display = replays_->update(ctx.scene, world_, robot_, progress_.won, ctx.tick);
+                                                             if (replays_->takeNaturalEnd())
+                                                               setStatusText(ctx.scene, "STATUS: LIVE GAMEPLAY");
                                                              replays_->syncGameplay(*rules_);
                                                              simulation_->showScene(display);
                                                            });

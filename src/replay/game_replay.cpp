@@ -132,8 +132,13 @@ const engine::Scene* ReplaySession::update(const engine::Scene& live, const Worl
                                            engine::EntityId robot, bool won, std::int64_t tick) {
   if (recording_)
     recorder_.record(makeReplayView(live, world, robot, won), tick);
-  if (!recorder_.playing() || !recorder_.step(presentation_))
+  const bool wasPlaying = recorder_.playing();
+  if (!wasPlaying)
     return nullptr;
+  if (!recorder_.step(presentation_)) {
+    naturalEnd_ = !recorder_.playing();
+    return nullptr;
+  }
   if (!marker_ || !presentation_.hasEntity(*marker_)) {
     marker_ = presentation_.createEntity();
     presentation_.add<ReplayView>(*marker_);
