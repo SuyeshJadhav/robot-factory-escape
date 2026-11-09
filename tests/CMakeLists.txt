@@ -21,6 +21,7 @@ add_game_test(factory_network_sessions)
 add_game_test(event_wire)
 add_game_test(event_input)
 add_game_test(event_lifecycle)
+add_game_test(event_remote)
 set_tests_properties(factory_network_sessions PROPERTIES TIMEOUT 90)
 
 target_compile_definitions(game_sprites_tests PRIVATE

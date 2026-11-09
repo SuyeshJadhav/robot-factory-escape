@@ -2,12 +2,14 @@
 
 #include <engine/events/simpleEvent.hpp>
 #include <engine/ids.hpp>
+#include <engine/entity.hpp>
 
 #include <bit>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <unordered_map>
 #include <glm/vec2.hpp>
 
 namespace robotNet {
@@ -63,5 +65,25 @@ struct LifeEvent : engine::events::simpleEvent {
 };
 
 static_assert(engine::events::networkedEvent<LifeEvent>);
+
+class RemoteLives {
+public:
+  bool observe(const LifeEvent&);
+  bool observeSnapshot(engine::NetId, std::uint32_t revision, bool alive);
+  std::optional<bool> alive(engine::NetId) const;
+  std::optional<glm::vec2> takeSpawnPosition(engine::NetId);
+  void rememberPose(engine::NetId, const engine::Transform&);
+  std::optional<engine::Transform> acceptedPose(engine::NetId) const;
+  void forget(engine::ClientId);
+
+private:
+  struct Entry {
+    std::uint32_t revision;
+    bool alive;
+    std::optional<glm::vec2> pendingSpawn;
+    std::optional<engine::Transform> pose;
+  };
+  std::unordered_map<engine::NetId, Entry> entries_;
+};
 
 } // namespace robotNet
