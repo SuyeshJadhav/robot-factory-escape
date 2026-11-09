@@ -1,10 +1,17 @@
 function(add_game_test name)
     add_executable(${name}_tests ${name}_tests.cpp)
     target_link_libraries(${name}_tests PRIVATE robot_factory_core)
+    # Legacy regression setup uses assert; keep those checks active in Release.
+    if(MSVC)
+        target_compile_options(${name}_tests PRIVATE /UNDEBUG)
+    else()
+        target_compile_options(${name}_tests PRIVATE -UNDEBUG)
+    endif()
     add_test(NAME ${name} COMMAND ${name}_tests)
 endfunction()
 
 add_game_test(player_motion)
+add_game_test(build_mode)
 add_game_test(moving_platform)
 add_game_test(game_progress)
 add_game_test(game_sprites)
