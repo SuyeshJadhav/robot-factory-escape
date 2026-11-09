@@ -71,6 +71,125 @@ void playbackIsolationAndVisibility() {
                 "playback never mutates live transforms, motion, artwork, or entity collection");
 }
 
+void pausedInputClearsJump() {
+  using namespace engine::SC;
+  // A paused tap, a key held across resume, and a request pending just before pause.
+  for (int scenario : {0, 1, 2}) {
+    ReplayRig rig;
+    auto& game = rig.gameplay;
+    game.stand();
+    std::int64_t counter = 0;
+    engine::Timeline source(&counter, 60), time(source, 60);
+    engine::SimulationThread sim(game.scene, time, [&](const engine::TickContext& ctx) {
+      game.tick = ctx.tick;
+      rig.replay->syncGameplay(game.rules);
+      game.rules.step(ctx.scene, game.physics, ctx.tick, ctx.dt);
+    });
+    sim.advanceFrame();
+    engine::KeyboardState keys;
+    auto key = [&](engine::SC::SDL_Scancode code, bool down) {
+      const auto previous = keys;
+      keys.setKey(code, down);
+      sim.post([&, keys, previous](engine::Scene& scene, engine::Timeline& timeline) {
+        rig.replay->syncGameplay(game.rules, sim, timeline);
+        game.rules.input(scene, keys, previous, game.tick);
+        rig.replay->syncGameplay(game.rules, sim, timeline);
+      });
+      sim.advanceFrame();
+    };
+    if (scenario == 2)
+      key(SDL_SCANCODE_SPACE, true);
+    time.pause();
+    key(SDL_SCANCODE_D, true);
+    if (scenario != 2)
+      key(SDL_SCANCODE_SPACE, true);
+    if (scenario != 1)
+      key(SDL_SCANCODE_SPACE, false);
+    key(SDL_SCANCODE_D, false);
+    time.unpause();
+    ++counter;
+    sim.advanceFrame();
+    auto frame = sim.takeRenderFrame();
+    test::require(frame && frame->scene.getRigidBody(game.robot)->velocity == glm::vec2{0.f, 0.f},
+                  "paused input and pending pre-pause jumps do not leak into resumed physics");
+    key(SDL_SCANCODE_SPACE, false);
+    key(SDL_SCANCODE_SPACE, true);
+    ++counter;
+    sim.advanceFrame();
+    frame = sim.takeRenderFrame();
+    test::require(frame && frame->scene.getRigidBody(game.robot)->velocity.y < 0.f,
+                  "a fresh Space press after resume still jumps");
+    time.pause();
+    const auto revision = game.rules.revision();
+    key(SDL_SCANCODE_R, true);
+    frame = sim.takeRenderFrame();
+    test::require(frame && time.paused() && game.rules.alive() &&
+                      game.rules.revision() == revision + 1 && frame->scene.getShape(game.robot),
+                  "blocking paused input still permits immediate event-driven restart");
+  }
+}
+
+void stoppedReplayClearsPausedFrame() {
+  using namespace engine::SC;
+  ReplayRig rig;
+  rig.recordTwoFrames();
+  auto& game = rig.gameplay;
+  std::int64_t counter = 0;
+  engine::Timeline source(&counter, 60), time(source, 60);
+  engine::SimulationThread* thread = nullptr;
+  engine::SimulationThread sim(game.scene, time, [&](const engine::TickContext& ctx) {
+    game.tick = ctx.tick;
+    game.events.run(ctx.scene, ctx.tick);
+    rig.replay->syncGameplay(game.rules);
+    const auto* display = rig.replay->update(ctx.scene, game.world, game.robot, false, ctx.tick);
+    rig.replay->syncGameplay(game.rules);
+    thread->showScene(display);
+  });
+  thread = &sim;
+  sim.advanceFrame();
+  engine::KeyboardState keys, previous;
+  auto input = [&] {
+    const auto now = keys;
+    const auto before = previous;
+    previous = now;
+    sim.post([&, now, before](engine::Scene& scene, engine::Timeline& timeline) {
+      rig.replay->syncGameplay(game.rules, sim, timeline);
+      game.rules.input(scene, now, before, game.tick);
+      rig.replay->syncGameplay(game.rules, sim, timeline);
+    });
+  };
+  keys.setKey(SDL_SCANCODE_F6, true);
+  input();
+  ++counter;
+  sim.advanceFrame();
+  auto frame = sim.takeRenderFrame();
+  test::require(frame && factory::isReplayFrame(frame->scene), "replay is displayed before stop");
+  keys = {};
+  keys.setKey(SDL_SCANCODE_ESCAPE, true);
+  input();
+  sim.post([](engine::Scene&, engine::Timeline& timeline) { timeline.pause(); });
+  sim.advanceFrame(); // Both commands run without another physics tick.
+  counter += 60;
+  sim.post([](engine::Scene&, engine::Timeline&) {});
+  sim.advanceFrame();
+  frame = sim.takeRenderFrame();
+  test::require(frame && time.paused() && !rig.replay->playing() &&
+                    !factory::isReplayFrame(frame->scene),
+                "manual stop clears replay display even if the next command pauses the clock");
+}
+
+void recordingBufferNotice() {
+  ReplayRig rig;
+  rig.tap(engine::SC::SDL_SCANCODE_F5);
+  test::require(rig.replay->recording() &&
+                    rig.status.find("ROLLING ~15 GAME SECONDS") != std::string::npos,
+                "record-start HUD explains the bounded rolling buffer in game time");
+  rig.tap(engine::SC::SDL_SCANCODE_F5);
+  test::require(!rig.replay->recording() &&
+                    rig.status.find("LAST ~15 GAME SECONDS") != std::string::npos,
+                "record-stop HUD explains that only the recent window is retained");
+}
+
 void naturalCompletionReportsOnce() {
   ReplayRig rig;
   rig.recordTwoFrames();
@@ -234,6 +353,9 @@ void manualReplayControls() {
 
 int main() {
   return test::run([] {
+    pausedInputClearsJump();
+    stoppedReplayClearsPausedFrame();
+    recordingBufferNotice();
     naturalCompletionReportsOnce();
     replayControlFeedback();
     blockedLifecycleWork();

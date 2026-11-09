@@ -81,6 +81,13 @@ void ReplaySession::syncGameplay(GameEvents& gameplay) const noexcept {
   gameplay.setGameplayBlocked(playing());
 }
 
+void ReplaySession::syncGameplay(GameEvents& gameplay, engine::SimulationThread& simulation,
+                                  const engine::Timeline& time) const noexcept {
+  gameplay.setGameplayBlocked(playing() || time.paused());
+  if (!playing())
+    simulation.showScene(nullptr);
+}
+
 std::optional<std::string> ReplaySession::feedback(std::string message) {
   banner_ = message;
   if (marker_)
@@ -104,7 +111,8 @@ std::optional<std::string> ReplaySession::input(const engine::events::inputEvent
       events_.raise(engine::events::replayRecordStop{}, events_.now(), -40);
     else
       events_.raise(engine::events::replayRecordStart{}, events_.now(), -40);
-    return recording_ ? "STATUS: RECORDING STOPPED - F6 TO REPLAY" : "STATUS: RECORDING - F5 TO STOP";
+    return recording_ ? "STATUS: RECORDING STOPPED - LAST ~15 GAME SECONDS - F6 TO REPLAY"
+                      : "STATUS: RECORDING - ROLLING ~15 GAME SECONDS - F5 TO STOP";
   }
   if (event.key == SDL_SCANCODE_F6) {
     if (playing()) {

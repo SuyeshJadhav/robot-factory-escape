@@ -34,6 +34,8 @@ public:
   bool playing() const noexcept { return recorder_.playing(); }
   std::optional<std::string> input(const engine::events::inputEvent&, bool alive, bool paused);
   void syncGameplay(GameEvents&) const noexcept;
+  /// Synchronize posted input even when the paused clock produces no physics tick.
+  void syncGameplay(GameEvents&, engine::SimulationThread&, const engine::Timeline&) const noexcept;
   /// True once after playback runs out by itself, so the live HUD can leave the replay text.
   bool takeNaturalEnd() noexcept { return std::exchange(naturalEnd_, false); }
   const engine::Scene* update(const engine::Scene&, const World&, engine::EntityId robot,
@@ -43,7 +45,7 @@ private:
   std::optional<std::string> feedback(std::string);
   engine::events::eventManager& events_;
   engine::FontId hudFont_;
-  engine::replay::replayRecorder recorder_;
+  engine::replay::replayRecorder recorder_{60, 15}; // Rolling ~15 seconds at the game's 60 Hz clock.
   bool recording_ = false;
   bool naturalEnd_ = false;
   engine::Scene presentation_;

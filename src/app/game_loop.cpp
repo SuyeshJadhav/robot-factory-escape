@@ -83,10 +83,11 @@ void Game::run() {
       window_.pollEvents();
       const auto keyboard = engine::KeyboardState::capture(input_);
       simulation_->submitKeyboard(keyboard);
-      simulation_->post([this, keyboard, previous](engine::Scene& scene, engine::Timeline&) {
+      simulation_->post([this, keyboard, previous](engine::Scene& scene, engine::Timeline& time) {
         const auto revision = rules_->revision();
+        replays_->syncGameplay(*rules_, *simulation_, time);
         rules_->input(scene, keyboard, previous, lastSimulationTick_);
-        replays_->syncGameplay(*rules_);
+        replays_->syncGameplay(*rules_, *simulation_, time);
         if (rules_->revision() != revision && rules_->alive()) {
           sprites_.reset(scene, robot_, world_.drone);
           if (clientSession_ || peerSession_)
