@@ -17,6 +17,9 @@ struct ReplayView {};
 struct ReplayPresentation {
   std::optional<engine::ScalingMode> savedLiveScaling;
 };
+bool isReplayFrame(const engine::Scene&);
+engine::ScalingMode scalingForFrame(ReplayPresentation&, bool replayFrame, bool pPressed,
+                                     engine::ScalingMode current);
 
 engine::Scene makeReplayView(const engine::Scene&, const World&, engine::EntityId robot, bool won);
 
@@ -33,12 +36,14 @@ public:
                               bool won, std::int64_t tick);
 
 private:
+  std::optional<std::string> feedback(std::string);
   engine::events::eventManager& events_;
   engine::FontId hudFont_;
   engine::replay::replayRecorder recorder_;
   bool recording_ = false;
   engine::Scene presentation_;
   std::optional<engine::EntityId> marker_;
+  std::string banner_ = "REPLAY - ESC TO RETURN";
 };
 
 } // namespace factory

@@ -46,6 +46,7 @@ private:
   // Window must outlive its renderer; members are destroyed in reverse order.
   engine::Window window_;
   engine::Renderer renderer_;
+  factory::ReplayPresentation replayPresentation_;
   engine::Scene scene_;
   engine::InputHandler input_;
   engine::PhysicsSystem physics_{gameSettings::gravity};

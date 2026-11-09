@@ -71,6 +71,24 @@ void playbackIsolationAndVisibility() {
                 "playback never mutates live transforms, motion, artwork, or entity collection");
 }
 
+void replayControlFeedback() {
+  ReplayRig rig;
+  rig.recordTwoFrames();
+  rig.tap(engine::SC::SDL_SCANCODE_F6);
+  rig.playbackFrame();
+  rig.tap(engine::SC::SDL_SCANCODE_F5);
+  const auto* frame = rig.playbackFrame();
+  test::require(frame && !frame->texts().empty() &&
+                    frame->texts().begin()->second.val.find("STOP REPLAY") != std::string::npos,
+                "rejected recording control is visible in replay banner, not hidden live HUD");
+  for (const auto key : {engine::SC::SDL_SCANCODE_T, engine::SC::SDL_SCANCODE_1,
+                         engine::SC::SDL_SCANCODE_2, engine::SC::SDL_SCANCODE_3}) {
+    rig.tap(key);
+    test::require(rig.replay->playing() && rig.status.find("LOCKED") != std::string::npos,
+                  "time-control events are handled and rejected during playback");
+  }
+}
+
 void blockedLifecycleWork() {
   ReplayRig dead;
   dead.recordTwoFrames();
@@ -198,6 +216,7 @@ void manualReplayControls() {
 
 int main() {
   return test::run([] {
+    replayControlFeedback();
     blockedLifecycleWork();
     replayJumpBoundaries();
     manualReplayControls();

@@ -7,6 +7,25 @@
 
 namespace factory {
 
+bool isReplayFrame(const engine::Scene& scene) {
+  return !scene.all<ReplayView>().empty();
+}
+
+engine::ScalingMode scalingForFrame(ReplayPresentation& state, bool replayFrame,
+                                     bool pPressed, engine::ScalingMode current) {
+  if (replayFrame) {
+    if (!state.savedLiveScaling)
+      state.savedLiveScaling = current;
+    return engine::ScalingMode::Proportional;
+  }
+  auto mode = state.savedLiveScaling.value_or(current);
+  state.savedLiveScaling.reset();
+  if (pPressed)
+    mode = mode == engine::ScalingMode::Proportional ? engine::ScalingMode::Constant
+                                                    : engine::ScalingMode::Proportional;
+  return mode;
+}
+
 engine::Scene makeReplayView(const engine::Scene& live, const World& world,
                              engine::EntityId robot, bool won) {
   const auto camera = cameraForPlayer(live, robot, levelLayout::levelSize.x);
@@ -38,6 +57,7 @@ ReplaySession::ReplaySession(engine::events::eventManager& events, engine::FontI
     recording_ = false;
     presentation_ = engine::Scene{};
     marker_.reset();
+    banner_ = "REPLAY - ESC TO RETURN";
     recorder_.startPlayback(e.fromTick);
   });
   events_.subscribe<engine::events::replayPlayStop>([this](const auto&, engine::Scene&) {
@@ -49,14 +69,25 @@ void ReplaySession::syncGameplay(GameEvents& gameplay) const noexcept {
   gameplay.setGameplayBlocked(playing());
 }
 
+std::optional<std::string> ReplaySession::feedback(std::string message) {
+  banner_ = message;
+  if (marker_)
+    if (auto* text = presentation_.getText(*marker_))
+      text->val = message;
+  return message;
+}
+
 std::optional<std::string> ReplaySession::input(const engine::events::inputEvent& event,
                                                 bool alive, bool paused) {
   if (!event.pressed)
     return std::nullopt;
   using namespace engine::SC;
+  if (playing() && (event.key == SDL_SCANCODE_T || event.key == SDL_SCANCODE_1 ||
+                    event.key == SDL_SCANCODE_2 || event.key == SDL_SCANCODE_3))
+    return feedback("STATUS: TIME CONTROLS LOCKED DURING REPLAY");
   if (event.key == SDL_SCANCODE_F5) {
     if (playing())
-      return "STATUS: STOP REPLAY BEFORE RECORDING";
+      return feedback("STATUS: STOP REPLAY BEFORE RECORDING");
     if (recording_)
       events_.raise(engine::events::replayRecordStop{}, events_.now(), -40);
     else
@@ -95,7 +126,7 @@ const engine::Scene* ReplaySession::update(const engine::Scene& live, const Worl
     marker_ = presentation_.createEntity();
     presentation_.add<ReplayView>(*marker_);
     presentation_.transform(*marker_).position = {32.f, 32.f};
-    presentation_.addText(*marker_, {.val = "REPLAY - ESC TO RETURN", .font = hudFont_,
+    presentation_.addText(*marker_, {.val = banner_, .font = hudFont_,
                                      .color = {80, 255, 220, 255}});
   }
   return &presentation_;

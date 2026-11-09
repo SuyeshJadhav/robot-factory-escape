@@ -2,8 +2,35 @@
 #include <robot_factory_escape/replay/game_replay.hpp>
 #include <robot_factory_escape/graphics/camera.hpp>
 
+void replayScalingPolicy() {
+  using engine::ScalingMode;
+  for (const auto initial : {ScalingMode::Constant, ScalingMode::Proportional}) {
+    factory::ReplayPresentation state;
+    test::require(factory::scalingForFrame(state, true, false, initial) == ScalingMode::Proportional,
+                  "replay always fits its fixed logical viewport");
+    test::require(factory::scalingForFrame(state, true, true, ScalingMode::Proportional) ==
+                      ScalingMode::Proportional && state.savedLiveScaling == initial,
+                  "P during replay changes neither projection nor saved live preference");
+    test::require(factory::scalingForFrame(state, false, false, ScalingMode::Proportional) == initial &&
+                      !state.savedLiveScaling, "first live frame restores original scaling");
+    const auto toggled = initial == ScalingMode::Constant ? ScalingMode::Proportional : ScalingMode::Constant;
+    test::require(factory::scalingForFrame(state, false, true, initial) == toggled,
+                  "subsequent live P toggles normally");
+    factory::scalingForFrame(state, true, false, initial);
+    test::require(factory::scalingForFrame(state, false, true, ScalingMode::Proportional) == toggled,
+                  "P on first returning live frame restores first, then toggles");
+  }
+  engine::Scene live, display;
+  display.createEntity();
+  display.add<factory::ReplayView>(display.createEntity());
+  const auto copied = display;
+  test::require(!factory::isReplayFrame(live) && factory::isReplayFrame(copied),
+                "copied marker, not original IDs, determines presentation mode");
+}
+
 int main() {
   return test::run([] {
+    replayScalingPolicy();
     for (int padding : {0, 3, 11}) {
       engine::Scene live;
       for (int i = 0; i < padding; ++i)

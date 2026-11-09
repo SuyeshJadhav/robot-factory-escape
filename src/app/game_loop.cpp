@@ -91,9 +91,7 @@ void Game::run() {
         }
         publishLifeEvents(lastSimulationTick_);
       });
-      using namespace engine::SC;
-      if (keyboard.justPressed(SDL_SCANCODE_P, previous))
-        renderer_.toggleScalingMode();
+      const bool pPressed = keyboard.justPressed(engine::SC::SDL_SCANCODE_P, previous);
 
       previous = keyboard;
 
@@ -124,6 +122,8 @@ void Game::run() {
       if (auto frame = simulation_->takeRenderFrame()) {
         scene_ = std::move(frame->scene);
       }
+      renderer_.setScalingMode(factory::scalingForFrame(replayPresentation_,
+          factory::isReplayFrame(scene_), pPressed, renderer_.scalingMode()));
       if (auto failure = simulation_->failure())
         std::rethrow_exception(failure);
       const float sampleSeconds = std::chrono::duration<float>(frameStart - fpsSampleStart).count();
