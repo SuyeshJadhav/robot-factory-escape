@@ -54,6 +54,7 @@ add_library(robot_factory_core STATIC
     src/gameplay/factory_world.cpp
     src/gameplay/respawn.cpp
     src/gameplay/factory_gameplay.cpp
+    src/gameplay/game_events.cpp
     src/graphics/game_sprites.cpp
 )
 target_include_directories(robot_factory_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
