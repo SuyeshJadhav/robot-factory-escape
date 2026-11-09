@@ -64,6 +64,10 @@ file(WRITE "${fetched_engine}/CMakeLists.txt"
     "cmake_minimum_required(VERSION 3.28)\nadd_library(engine INTERFACE)\nadd_library(engine::engine ALIAS engine)\n")
 # A placeholder suffices for configure; no executable is built with this fixture.
 file(WRITE "${fetched_engine}/examples/hello_entity/assets/SuperBouncer.ttf" "")
+file(MAKE_DIRECTORY "${fetched_engine}/include/engine/events"
+    "${fetched_engine}/include/engine/replay")
+file(WRITE "${fetched_engine}/include/engine/events/eventManager.hpp" "")
+file(WRITE "${fetched_engine}/include/engine/replay/replayRecorder.hpp" "")
 
 # An unrelated sibling engine must not override the pinned download by default.
 file(MAKE_DIRECTORY "${workspace}/GEF_engine")
@@ -83,5 +87,22 @@ set(incomplete_engine "${workspace}/incomplete engine")
 file(MAKE_DIRECTORY "${incomplete_engine}")
 file(WRITE "${incomplete_engine}/CMakeLists.txt"
     "message(FATAL_ERROR \"ENGINE_SETUP_SHOULD_NOT_RUN\")\n")
+file(MAKE_DIRECTORY "${incomplete_engine}/include/engine/events"
+    "${incomplete_engine}/include/engine/replay")
+file(WRITE "${incomplete_engine}/include/engine/events/eventManager.hpp" "")
+file(WRITE "${incomplete_engine}/include/engine/replay/replayRecorder.hpp" "")
 expect_setup_failure(missing-font "SuperBouncer.ttf" "complete engine checkout"
     "-DGEF_ENGINE_DIR=${incomplete_engine}")
+
+# A legacy engine with the font must still fail before running its build.
+set(legacy_engine "${workspace}/legacy engine")
+file(MAKE_DIRECTORY "${legacy_engine}/examples/hello_entity/assets")
+file(WRITE "${legacy_engine}/examples/hello_entity/assets/SuperBouncer.ttf" "")
+file(WRITE "${legacy_engine}/CMakeLists.txt"
+    "message(FATAL_ERROR \"ENGINE_SETUP_SHOULD_NOT_RUN\")\n")
+expect_setup_failure(missing-events "engine/events/eventManager.hpp" "GEF_ENGINE_DIR"
+    "-DGEF_ENGINE_DIR=${legacy_engine}")
+file(MAKE_DIRECTORY "${legacy_engine}/include/engine/events")
+file(WRITE "${legacy_engine}/include/engine/events/eventManager.hpp" "")
+expect_setup_failure(missing-replay "engine/replay/replayRecorder.hpp" "GEF_ENGINE_DIR"
+    "-DGEF_ENGINE_DIR=${legacy_engine}")

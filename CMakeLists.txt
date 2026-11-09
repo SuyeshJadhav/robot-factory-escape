@@ -7,7 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Download the pinned Milestone 3 engine unless a local checkout is supplied.
 set(GEF_ENGINE_DIR "" CACHE PATH
-    "Optional local GEF_engine v0.3.0 checkout; leave empty to download it")
+    "Optional local GEF_engine checkout; use current PR source for Milestone 4 development")
 set(ENGINE_BUILD_TESTS OFF CACHE BOOL "Build engine tests" FORCE)
 if(GEF_ENGINE_DIR)
     get_filename_component(GAME_ENGINE_SOURCE_DIR "${GEF_ENGINE_DIR}" ABSOLUTE
@@ -29,11 +29,20 @@ else()
     FetchContent_MakeAvailable(gef_engine)
     set(GAME_ENGINE_SOURCE_DIR "${gef_engine_SOURCE_DIR}")
 endif()
+foreach(feature IN ITEMS engine/events/eventManager.hpp engine/replay/replayRecorder.hpp)
+    if(NOT EXISTS "${GAME_ENGINE_SOURCE_DIR}/include/${feature}")
+        message(FATAL_ERROR
+            "Milestone 4 event/replay headers are required: ${feature}\n"
+            "Select the current engine PR checkout with "
+            "-DGEF_ENGINE_DIR=/path/to/current-pr-checkout. "
+            "The final Milestone 4 engine dependency has not been selected yet.")
+    endif()
+endforeach()
 set(GAME_HUD_FONT "${GAME_ENGINE_SOURCE_DIR}/examples/hello_entity/assets/SuperBouncer.ttf")
 if(NOT EXISTS "${GAME_HUD_FONT}")
     message(FATAL_ERROR
         "HUD font not found at: ${GAME_HUD_FONT}\n"
-        "Use a complete engine checkout at v0.3.0, including examples/hello_entity/assets.")
+        "Use a complete engine checkout, including examples/hello_entity/assets.")
 endif()
 if(GEF_ENGINE_DIR)
     add_subdirectory("${GAME_ENGINE_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/engine" EXCLUDE_FROM_ALL)
