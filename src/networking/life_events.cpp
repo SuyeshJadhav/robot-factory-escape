@@ -16,6 +16,32 @@ bool validLife(const LifeEvent& event) {
 }
 }
 
+bool LifeRelay::accept(const LifeEvent& event, bool senderConnected) {
+  if (!senderConnected || !event.remote || event.from == engine::kServerId ||
+      event.from > engine::kMaxClientIdPerRun || !validLife(event) ||
+      event.entity != robotId(event.from))
+    return false;
+  const auto found = latest_.find(event.entity);
+  if (found != latest_.end() && event.revision <= found->second.revision)
+    return false;
+  latest_[event.entity] = event;
+  return true;
+}
+
+void LifeRelay::forget(engine::ClientId owner) {
+  std::erase_if(latest_, [owner](const auto& entry) { return engine::ownerOf(entry.first) == owner; });
+}
+
+std::vector<LifeEvent> LifeRelay::latest() const {
+  std::vector<LifeEvent> events;
+  events.reserve(latest_.size());
+  for (const auto& [id, event] : latest_)
+    events.push_back(event);
+  std::sort(events.begin(), events.end(),
+            [](const auto& a, const auto& b) { return a.entity < b.entity; });
+  return events;
+}
+
 bool RemoteLives::observe(const LifeEvent& event) {
   if (!validLife(event))
     return false;

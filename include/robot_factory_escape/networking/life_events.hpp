@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <optional>
 #include <unordered_map>
+#include <vector>
 #include <glm/vec2.hpp>
 
 namespace robotNet {
@@ -65,6 +66,16 @@ struct LifeEvent : engine::events::simpleEvent {
 };
 
 static_assert(engine::events::networkedEvent<LifeEvent>);
+
+class LifeRelay {
+public:
+  bool accept(const LifeEvent&, bool senderConnected);
+  void forget(engine::ClientId);
+  std::vector<LifeEvent> latest() const;
+
+private:
+  std::unordered_map<engine::NetId, LifeEvent> latest_;
+};
 
 class RemoteLives {
 public:
