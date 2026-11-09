@@ -1,5 +1,6 @@
 #include <robot_factory_escape/replay/game_replay.hpp>
 #include <robot_factory_escape/graphics/camera.hpp>
+#include <robot_factory_escape/gameplay/game_events.hpp>
 #include <engine/events/commonEvents.hpp>
 
 #include <vector>
@@ -42,6 +43,10 @@ ReplaySession::ReplaySession(engine::events::eventManager& events, engine::FontI
   events_.subscribe<engine::events::replayPlayStop>([this](const auto&, engine::Scene&) {
     recorder_.stopPlayback();
   });
+}
+
+void ReplaySession::syncGameplay(GameEvents& gameplay) const noexcept {
+  gameplay.setGameplayBlocked(playing());
 }
 
 std::optional<std::string> ReplaySession::input(const engine::events::inputEvent& event,

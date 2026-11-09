@@ -71,6 +71,48 @@ void playbackIsolationAndVisibility() {
                 "playback never mutates live transforms, motion, artwork, or entity collection");
 }
 
+void replayJumpBoundaries() {
+  using namespace engine::SC;
+  ReplayRig manual;
+  manual.recordTwoFrames();
+  manual.gameplay.stand();
+  manual.tap(SDL_SCANCODE_F6);
+  manual.tap(SDL_SCANCODE_SPACE);
+  manual.tap(SDL_SCANCODE_ESCAPE);
+  manual.gameplay.stand();
+  manual.gameplay.step();
+  test::require(manual.gameplay.scene.getRigidBody(manual.gameplay.robot)->velocity.y == 0.f,
+                "space_tap_during_replay_then_escape_does_not_jump");
+  ReplayRig natural;
+  natural.recordTwoFrames();
+  natural.gameplay.stand();
+  natural.tap(SDL_SCANCODE_F6);
+  natural.tap(SDL_SCANCODE_SPACE);
+  natural.playbackFrame();
+  natural.playbackFrame();
+  natural.playbackFrame();
+  natural.gameplay.stand();
+  natural.gameplay.step();
+  test::require(!natural.replay->playing() &&
+                    natural.gameplay.scene.getRigidBody(natural.gameplay.robot)->velocity.y == 0.f,
+                "natural completion clears replay-time one-shot jump requests");
+  ReplayRig held;
+  held.recordTwoFrames();
+  held.gameplay.stand();
+  held.key(SDL_SCANCODE_SPACE, true);
+  held.tap(SDL_SCANCODE_F6);
+  held.tap(SDL_SCANCODE_ESCAPE);
+  held.gameplay.stand();
+  held.gameplay.step();
+  test::require(held.gameplay.scene.getRigidBody(held.gameplay.robot)->velocity.y == 0.f,
+                "pending jump on entry and Space held across exit cannot auto-jump");
+  held.key(SDL_SCANCODE_SPACE, false);
+  held.key(SDL_SCANCODE_SPACE, true);
+  held.gameplay.step();
+  test::require(held.gameplay.scene.getRigidBody(held.gameplay.robot)->velocity.y < 0.f,
+                "fresh release and press after playback jumps normally");
+}
+
 void manualReplayControls() {
   using namespace engine::SC;
   ReplayRig held;
@@ -119,6 +161,7 @@ void manualReplayControls() {
 
 int main() {
   return test::run([] {
+    replayJumpBoundaries();
     manualReplayControls();
     playbackIsolationAndVisibility();
     engine::Scene live;

@@ -53,6 +53,7 @@ void Game::run() {
   simulation_ = std::make_unique<engine::SimulationThread>(scene_, gameTime_,
                                                            [this](const engine::TickContext &ctx) {
                                                              lastSimulationTick_ = ctx.tick;
+                                                             replays_->syncGameplay(*rules_);
                                                              update(ctx.scene, ctx.dt);
                                                              if (clientSession_ || peerSession_)
                                                                publishRobot(ctx.scene, ctx.tick);
@@ -79,6 +80,7 @@ void Game::run() {
       simulation_->post([this, keyboard, previous](engine::Scene& scene, engine::Timeline&) {
         const auto revision = rules_->revision();
         rules_->input(scene, keyboard, previous, lastSimulationTick_);
+        replays_->syncGameplay(*rules_);
         if (rules_->revision() != revision && rules_->alive()) {
           sprites_.reset(scene, robot_, world_.drone);
           if (clientSession_ || peerSession_)

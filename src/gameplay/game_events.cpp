@@ -19,8 +19,10 @@ GameEvents::GameEvents(engine::events::eventManager& events, const World& world,
         if (e.pressed && e.key == engine::SC::SDL_SCANCODE_SPACE && alive_ && !blocked_ &&
             !progress_.won)
           jumpRequested_ = true;
-        if (e.pressed && e.key == engine::SC::SDL_SCANCODE_R && !blocked_)
+        if (e.pressed && e.key == engine::SC::SDL_SCANCODE_R) {
+          setGameplayBlocked(false);
           events_.raise(RestartEvent{}, events_.now(), -30);
+        }
         if (controls_)
           controls_(e, scene);
       });

@@ -11,6 +11,8 @@
 
 namespace factory {
 
+class GameEvents;
+
 struct ReplayView {};
 struct ReplayPresentation {
   std::optional<engine::ScalingMode> savedLiveScaling;
@@ -26,6 +28,7 @@ public:
   bool recording() const noexcept { return recording_; }
   bool playing() const noexcept { return recorder_.playing(); }
   std::optional<std::string> input(const engine::events::inputEvent&, bool alive, bool paused);
+  void syncGameplay(GameEvents&) const noexcept;
   const engine::Scene* update(const engine::Scene&, const World&, engine::EntityId robot,
                               bool won, std::int64_t tick);
 

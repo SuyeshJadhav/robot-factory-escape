@@ -19,8 +19,18 @@ struct ReplayRig {
     replay = std::make_unique<factory::ReplaySession>(gameplay.events, 0);
   }
 
-  void key(engine::SC::SDL_Scancode code, bool pressed) { gameplay.key(code, pressed); }
+  void key(engine::SC::SDL_Scancode code, bool pressed) {
+    gameplay.key(code, pressed);
+    replay->syncGameplay(gameplay.rules);
+  }
   void tap(engine::SC::SDL_Scancode code) { key(code, true); key(code, false); }
+
+  const engine::Scene* playbackFrame() {
+    const auto* frame = replay->update(gameplay.scene, gameplay.world, gameplay.robot,
+                                        gameplay.progress.won, ++gameplay.tick);
+    replay->syncGameplay(gameplay.rules);
+    return frame;
+  }
 
   void recordTwoFrames() {
     tap(engine::SC::SDL_SCANCODE_F5);
