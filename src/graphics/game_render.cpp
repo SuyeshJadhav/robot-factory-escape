@@ -3,6 +3,8 @@
 #include <robot_factory_escape/graphics/camera.hpp>
 
 void Game::render() {
+  if (factory::renderReplayFrame(renderer_, scene_, backdropTexture_))
+    return;
   const float viewportWidth = renderer_.scalingMode() == engine::ScalingMode::Proportional
       ? levelLayout::levelSize.x : static_cast<float>(window_.width());
   const auto camera = factory::cameraForPlayer(scene_,robot_,viewportWidth);

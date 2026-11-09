@@ -28,7 +28,7 @@ void Game::createLevel() {
              "A/D OR ARROWS MOVE  SPACE JUMP  R RESTART  T PAUSE  1/2/3 SPEED  "
              "P SCALE",
              hudFont, {235, 240, 255, 255});
-  createText({32.f, 94.f}, "WATCH THE MOVING PLATFORM  ->  REACH THE EXIT", hudFont,
+  createText({32.f, 94.f}, "F5 RECORD  F6 REPLAY  ESC STOP  ->  REACH THE EXIT", hudFont,
              {255, 190, 55, 255});
   statusText_ =
       createText({32.f, 126.f}, "STATUS: AVOID THE PATROL DRONE", hudFont, {255, 110, 120, 255});

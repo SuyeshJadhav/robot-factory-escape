@@ -31,6 +31,7 @@ set_tests_properties(factory_network_sessions PROPERTIES TIMEOUT 90)
 
 target_compile_definitions(game_sprites_tests PRIVATE
     GAME_ASSET_DIR="${PROJECT_SOURCE_DIR}/assets/sprites/"
+    GAME_FONT_PATH="${GAME_HUD_FONT}"
 )
 set_tests_properties(network_sessions PROPERTIES TIMEOUT 25)
 set_tests_properties(game_sprites PROPERTIES

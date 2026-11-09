@@ -58,8 +58,9 @@ void Game::run() {
                                                              update(ctx.scene, ctx.dt);
                                                              if (clientSession_ || peerSession_)
                                                                publishRobot(ctx.scene, ctx.tick);
-                                                             replays_->update(ctx.scene, world_, robot_, progress_.won, ctx.tick);
+                                                             const auto* display = replays_->update(ctx.scene, world_, robot_, progress_.won, ctx.tick);
                                                              replays_->syncGameplay(*rules_);
+                                                             simulation_->showScene(display);
                                                            });
   rules_->postStart(*simulation_);
   simulation_->post([this](engine::Scene& scene, engine::Timeline&) {
@@ -122,8 +123,10 @@ void Game::run() {
       if (auto frame = simulation_->takeRenderFrame()) {
         scene_ = std::move(frame->scene);
       }
-      renderer_.setScalingMode(factory::scalingForFrame(replayPresentation_,
-          factory::isReplayFrame(scene_), pPressed, renderer_.scalingMode()));
+      const auto scaling = factory::scalingForFrame(replayPresentation_,
+          factory::isReplayFrame(scene_), pPressed, renderer_.scalingMode());
+      if (scaling != renderer_.scalingMode())
+        renderer_.setScalingMode(scaling);
       if (auto failure = simulation_->failure())
         std::rethrow_exception(failure);
       const float sampleSeconds = std::chrono::duration<float>(frameStart - fpsSampleStart).count();
@@ -133,7 +136,8 @@ void Game::run() {
         framesInSample = 0;
       }
       // This is a view-only metric: it must not follow the paused game clock.
-      scene_.getText(fpsText_)->val = fpsLabel;
+      if (!factory::isReplayFrame(scene_))
+        scene_.getText(fpsText_)->val = fpsLabel;
       render();
       ++framesInSample;
       // Include rendering time in the budget; multiple clients should not

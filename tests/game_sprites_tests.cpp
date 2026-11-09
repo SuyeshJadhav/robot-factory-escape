@@ -1,5 +1,6 @@
 #include <iostream>
 #include <robot_factory_escape/graphics/game_sprites.hpp>
+#include <robot_factory_escape/replay/game_replay.hpp>
 #include <stdexcept>
 
 void require(bool condition, const char *message) {
@@ -80,6 +81,32 @@ int main() {
     sprites.reset(scene, robot, drone);
     require(scene.getSpriteAnimation(robot)->sheet == idle,
             "Respawn did not restore robot artwork after the hidden interval");
+    engine::Scene replayLive;
+    for (int i = 0; i < 25; ++i)
+      replayLive.createEntity();
+    const auto replayWorld = factory::createWorld(replayLive);
+    const auto replayRobot = factory::createPlayer(replayLive, replayWorld);
+    sprites.reset(replayLive, replayRobot, replayWorld.drone);
+    const auto font = renderer.loadFont(GAME_FONT_PATH, 24.f);
+    const auto backdrop = renderer.loadTexture(std::string(GAME_ASSET_DIR) +
+        "background/cyberpunk_background_backdropa_idle.png");
+    engine::events::eventManager events;
+    factory::ReplaySession replay(events, font);
+    events.raise(engine::events::replayRecordStart{}, 0);
+    events.run(replayLive, 0);
+    replay.update(replayLive, replayWorld, replayRobot, false, 1);
+    events.raise(engine::events::replayRecordStop{}, 1);
+    events.raise(engine::events::replayPlayStart{}, 2);
+    events.run(replayLive, 2);
+    const auto* displayed = replay.update(replayLive, replayWorld, replayRobot, false, 2);
+    require(displayed && !displayed->hasEntity(replayRobot),
+            "Replay render fixture must use different entity IDs");
+    require(!factory::renderReplayFrame(renderer, replayLive, backdrop),
+            "Live Scene must not take the replay-only rendering branch");
+    renderer.setCamera({123.f, 45.f});
+    require(factory::renderReplayFrame(renderer, *displayed, backdrop) &&
+                renderer.camera() == glm::vec2{0.f, 0.f},
+            "Reconstructed replay and real banner must render at camera zero without live IDs");
     std::cout << "Sprite loading, state transitions, playback, and rendering "
                  "passed.\n";
   } catch (const std::exception &error) {

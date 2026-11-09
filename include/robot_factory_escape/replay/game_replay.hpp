@@ -18,6 +18,7 @@ struct ReplayPresentation {
   std::optional<engine::ScalingMode> savedLiveScaling;
 };
 bool isReplayFrame(const engine::Scene&);
+bool renderReplayFrame(engine::Renderer&, const engine::Scene&, engine::TextureId backdrop);
 engine::ScalingMode scalingForFrame(ReplayPresentation&, bool replayFrame, bool pPressed,
                                      engine::ScalingMode current);
 

@@ -20,4 +20,5 @@ Game::Game(std::optional<NetworkOptions> network, float initialSpeed)
                     "resets the robot.");
   engine::log::info("Avoid the red patrol drone: contact returns you to the start.");
   engine::log::info("Reach the cyan factory exit to win. Press R to restart at any time.");
+  engine::log::info("F5: record/stop; F6: replay/stop; Escape: return to live gameplay.");
 }

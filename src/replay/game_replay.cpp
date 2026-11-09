@@ -11,6 +11,18 @@ bool isReplayFrame(const engine::Scene& scene) {
   return !scene.all<ReplayView>().empty();
 }
 
+bool renderReplayFrame(engine::Renderer& renderer, const engine::Scene& frame,
+                         engine::TextureId backdrop) {
+  if (!isReplayFrame(frame))
+    return false;
+  renderer.setCamera({0.f, 0.f});
+  renderer.clear({0, 0, 0, 255});
+  renderer.drawTexture(backdrop, {0.f, 0.f}, levelLayout::levelSize);
+  renderer.drawEntities(frame);
+  renderer.present();
+  return true;
+}
+
 engine::ScalingMode scalingForFrame(ReplayPresentation& state, bool replayFrame,
                                      bool pPressed, engine::ScalingMode current) {
   if (replayFrame) {
