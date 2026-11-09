@@ -65,6 +65,21 @@ int main() {
     require(scene.getSpriteAnimation(robot)->sheet == idle &&
                 scene.getSpriteAnimation(robot)->currentFrame == 0,
             "Restart did not reset sprites");
+    scene.removeShape(robot);
+    scene.removeSpriteAnimation(robot);
+    const auto droneBeforeDeath = scene.getSpriteAnimation(drone)->currentFrame;
+    sprites.update(scene, robot, true, false, 0.1f);
+    require(!scene.getShape(robot) && !scene.getSpriteAnimation(robot),
+            "Dead robot artwork was reattached by an animation update");
+    require(scene.getSpriteAnimation(drone)->currentFrame != droneBeforeDeath,
+            "Drone animation stopped while robot was dead");
+    renderer.clear({0, 0, 0, 255});
+    renderer.drawEntities(scene);
+    renderer.present();
+    scene.addShape(robot, {.texture = std::nullopt});
+    sprites.reset(scene, robot, drone);
+    require(scene.getSpriteAnimation(robot)->sheet == idle,
+            "Respawn did not restore robot artwork after the hidden interval");
     std::cout << "Sprite loading, state transitions, playback, and rendering "
                  "passed.\n";
   } catch (const std::exception &error) {

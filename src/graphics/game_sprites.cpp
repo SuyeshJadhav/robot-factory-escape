@@ -64,6 +64,10 @@ void GameSprites::update(engine::Scene &scene, engine::EntityId robot, bool grou
                          float dt) {
   if (won)
     return; // Freeze artwork along with gameplay at the exit.
+  if (!scene.getShape(robot)) {
+    engine::advanceAnimations(scene, std::clamp(dt, 0.f, 0.1f));
+    return;
+  }
   const float velocityX = scene.getRigidBody(robot)->velocity.x;
   if (velocityX != 0.f)
     facingLeft_ = velocityX < 0.f;

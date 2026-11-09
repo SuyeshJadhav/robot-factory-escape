@@ -25,8 +25,8 @@ void Game::update(engine::Scene &scene, float deltaSeconds) {
   case factory::TickResult::None:
     break;
   }
-  if (rules_->alive())
-    sprites_.update(scene,robot_,grounded_,progress_.won,deltaSeconds);
+  sprites_.update(scene,robot_,grounded_,progress_.won,deltaSeconds);
+  rules_->takeLifeEvents();
 }
 
 void Game::setStatusText(engine::Scene &scene, std::string message) {

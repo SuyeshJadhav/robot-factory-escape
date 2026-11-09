@@ -70,6 +70,7 @@ void Game::run() {
           if (clientSession_ || peerSession_)
             publishRobot(scene, lastSimulationTick_);
         }
+        rules_->takeLifeEvents();
       });
       using namespace engine::SC;
       if (keyboard.justPressed(SDL_SCANCODE_P, previous))
