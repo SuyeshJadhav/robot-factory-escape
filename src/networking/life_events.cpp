@@ -42,6 +42,30 @@ std::vector<LifeEvent> LifeRelay::latest() const {
   return events;
 }
 
+LifeServer::LifeServer(engine::networking::sessionServer& server) : server_(server) {
+  events_.subscribe<LifeEvent>([this](const LifeEvent& event, engine::Scene&) {
+    const auto roster = server_.roster();
+    const bool connected = std::any_of(roster.begin(), roster.end(),
+        [&](const auto& client) { return client.id == event.from; });
+    if (relay_.accept(event, connected))
+      server_.broadcast(LifeEvent::kType, event.encode(), events_.now());
+  }, true);
+}
+
+void LifeServer::pump(engine::Scene& scene, std::int64_t tick,
+                      const std::deque<engine::networking::rosterEvent>& changes) {
+  for (const auto& change : changes) {
+    if (change.change == engine::networking::RosterChange::Left) {
+      relay_.forget(change.client.id);
+    } else {
+      for (const auto& event : relay_.latest())
+        server_.send(change.client.id, LifeEvent::kType, event.encode(), tick);
+    }
+  }
+  events_.receive(server_.drainMessages(), tick);
+  events_.run(scene, tick);
+}
+
 bool RemoteLives::observe(const LifeEvent& event) {
   if (!validLife(event))
     return false;

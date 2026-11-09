@@ -1,6 +1,8 @@
 #pragma once
 
 #include <engine/events/simpleEvent.hpp>
+#include <engine/events/eventManager.hpp>
+#include <engine/networking/sessionServer.hpp>
 #include <engine/ids.hpp>
 #include <engine/entity.hpp>
 
@@ -75,6 +77,20 @@ public:
 
 private:
   std::unordered_map<engine::NetId, LifeEvent> latest_;
+};
+
+class LifeServer {
+public:
+  explicit LifeServer(engine::networking::sessionServer&);
+  LifeServer(const LifeServer&) = delete;
+  LifeServer& operator=(const LifeServer&) = delete;
+  void pump(engine::Scene&, std::int64_t tick,
+            const std::deque<engine::networking::rosterEvent>& changes);
+
+private:
+  engine::networking::sessionServer& server_;
+  LifeRelay relay_;
+  engine::events::eventManager events_;
 };
 
 class RemoteLives {

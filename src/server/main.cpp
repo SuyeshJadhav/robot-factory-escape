@@ -1,6 +1,7 @@
 #include <engine/engine.hpp>
 #include <robot_factory_escape/gameplay/factory_world.hpp>
 #include <robot_factory_escape/networking/world_binding.hpp>
+#include <robot_factory_escape/networking/life_events.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -54,6 +55,7 @@ int main(int argc, char **argv) {
     }
 
     engine::networking::sessionServer server(bind + ":" + std::to_string(port));
+    robotNet::LifeServer life(server);
     engine::Timeline realTime;
     engine::Timeline serverTime(realTime, 60);
     engine::Scene scene;
@@ -70,7 +72,9 @@ int main(int argc, char **argv) {
           factory::advanceWorld(ctx.scene,ctx.dt);
           platformX.store(ctx.scene.transform(world.movingPlatform).position.x);
           server.publishScene(ctx.scene, ctx.tick);
-          for (const auto &event : server.drainRosterEvents()) {
+          const auto rosterEvents = server.drainRosterEvents();
+          life.pump(ctx.scene, ctx.tick, rosterEvents);
+          for (const auto &event : rosterEvents) {
             engine::log::info("Client {} {}; {} connected", event.client.id,
                               event.change == engine::networking::RosterChange::Joined ? "joined"
                                                                                        : "left",
