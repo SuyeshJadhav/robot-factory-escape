@@ -28,7 +28,6 @@ void Game::connectNetwork(const NetworkOptions &network) {
     clientSession_->start();
   }
   factory::assignSpawn(scene_,world_,robot_,localClientId_);
-  factory::respawnPlayer(scene_,robot_,grounded_);
   scene_.getText(networkText_)->val = std::string("NETWORK: ") + (peerToPeer_ ? "PEER" : "SERVER") +
                                       "  PLAYER " + std::to_string(localClientId_) + "  CONNECTED";
   engine::log::info("Joined as client {} ({})", localClientId_,

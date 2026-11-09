@@ -2,8 +2,35 @@
 
 #include <iostream>
 
+void initialSpawnPrecedesFirstTick() {
+  engine::Scene scene;
+  const auto world = factory::createWorld(scene);
+  const auto robot = factory::createPlayer(scene, world);
+  factory::assignSpawn(scene, world, robot, 2);
+  bool grounded = false;
+  GameProgress progress;
+  engine::events::eventManager events;
+  factory::GameEvents rules(events, world, robot, 2, false, grounded, progress);
+  std::int64_t counter = 0;
+  engine::Timeline clock(&counter, 60);
+  engine::Timeline time(clock, 60);
+  bool called = false;
+  engine::SimulationThread simulation(std::move(scene), time, [&](const engine::TickContext& ctx) {
+    called = true;
+    test::require(rules.revision() == 1 && rules.alive() &&
+                      ctx.scene.transform(robot).position == glm::vec2{360.f, 300.f},
+                  "initial_spawn_precedes_first_tick");
+  });
+  rules.postStart(simulation);
+  simulation.advanceFrame();
+  ++counter;
+  simulation.advanceFrame();
+  test::require(called, "bootstrap test actually executes a simulation callback");
+}
+
 int main() {
   return test::run([] {
+    initialSpawnPrecedesFirstTick();
     EventRig drone;
     drone.scene.transform(drone.robot).position = drone.scene.transform(drone.world.drone).position;
     drone.scene.getRigidBody(drone.robot)->velocity = {100.f, 100.f};

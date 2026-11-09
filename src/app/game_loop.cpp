@@ -7,6 +7,9 @@
 #include <thread>
 
 void Game::run() {
+  rules_ = std::make_unique<factory::GameEvents>(events_, world_, robot_, localClientId_,
+                                                !clientSession_ && !peerSession_,
+                                                grounded_, progress_);
   simulation_ = std::make_unique<engine::SimulationThread>(scene_, gameTime_,
                                                            [this](const engine::TickContext &ctx) {
                                                              handleInput(ctx.scene, ctx.keyboard);
@@ -14,6 +17,7 @@ void Game::run() {
                                                              if (clientSession_ || peerSession_)
                                                                publishRobot(ctx.scene, ctx.tick);
                                                            });
+  rules_->postStart(*simulation_);
   simulation_->start();
   engine::KeyboardState previous;
   using Clock = std::chrono::steady_clock;

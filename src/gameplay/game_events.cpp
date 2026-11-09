@@ -58,6 +58,10 @@ GameEvents::GameEvents(engine::events::eventManager& events, const World& world,
       });
 }
 
+void GameEvents::postStart(engine::SimulationThread& simulation) {
+  simulation.post([this](engine::Scene& scene, engine::Timeline&) { start(scene, 0); });
+}
+
 void GameEvents::start(engine::Scene& scene, std::int64_t tick) {
   if (const auto* shape = scene.getShape(robot_))
     shape_ = *shape;

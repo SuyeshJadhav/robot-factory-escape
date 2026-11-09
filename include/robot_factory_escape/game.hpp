@@ -3,6 +3,7 @@
 #include <engine/engine.hpp>
 #include <robot_factory_escape/game_settings.hpp>
 #include <robot_factory_escape/gameplay/factory_gameplay.hpp>
+#include <robot_factory_escape/gameplay/game_events.hpp>
 #include <robot_factory_escape/gameplay/game_progress.hpp>
 #include <robot_factory_escape/graphics/game_sprites.hpp>
 #include <robot_factory_escape/networking/network_state.hpp>
@@ -47,7 +48,7 @@ private:
   engine::PhysicsSystem physics_{gameSettings::gravity};
   engine::Timeline realTime_;
   engine::Timeline gameTime_{realTime_, 60};
-  std::unique_ptr<engine::SimulationThread> simulation_;
+
 
   engine::EntityId robot_{};
   factory::World world_;
@@ -61,6 +62,9 @@ private:
   bool jumpKeyWasPressed_ = false;
   bool grounded_ = false;
   GameProgress progress_;
+  engine::events::eventManager events_;
+  std::unique_ptr<factory::GameEvents> rules_;
+  std::int64_t lastSimulationTick_ = 0;
   std::atomic<bool> renderedWon_{false};
   std::unique_ptr<engine::networking::sessionClient> clientSession_;
   std::unique_ptr<engine::networking::peerSession> peerSession_;
@@ -68,4 +72,6 @@ private:
   std::unordered_set<engine::ClientId> remoteIds_;
   bool peerToPeer_ = false;
   bool connected_ = true;
+  // Stop the worker before destroying anything its callbacks reference.
+  std::unique_ptr<engine::SimulationThread> simulation_;
 };

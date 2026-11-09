@@ -26,6 +26,7 @@ public:
   GameEvents& operator=(const GameEvents&) = delete;
 
   void start(engine::Scene&, std::int64_t tick);
+  void postStart(engine::SimulationThread&);
   void input(engine::Scene&, const engine::KeyboardState& now,
              const engine::KeyboardState& previous, std::int64_t tick);
   TickResult step(engine::Scene&, engine::PhysicsSystem&, std::int64_t tick, float dt);
