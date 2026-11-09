@@ -15,12 +15,13 @@ struct EventRig {
   factory::GameEvents rules;
   engine::KeyboardState keyboard;
   std::int64_t tick = 0;
+  std::vector<robotNet::LifeEvent> initialNotices;
 
   explicit EventRig(engine::ClientId owner = 1, bool ownsWorld = false)
       : rules(events, world, robot, owner, ownsWorld, grounded, progress) {
     factory::assignSpawn(scene, world, robot, owner);
     rules.start(scene, tick);
-    rules.takeLifeEvents();
+    initialNotices = rules.takeLifeEvents();
   }
 
   void key(engine::SC::SDL_Scancode code, bool pressed) {

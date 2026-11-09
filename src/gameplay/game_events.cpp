@@ -39,6 +39,11 @@ GameEvents::GameEvents(engine::events::eventManager& events, const World& world,
         if (!e.remote && e.entity == robot_)
           die(scene);
       });
+  events_.subscribe<RespawnDue>(
+      [this](const RespawnDue& e, engine::Scene&) {
+        if (e.generation == generation_ && !alive_)
+          events_.raise(engine::events::spawnEvent{{}, robot_, owner_, {}}, events_.now());
+      });
 }
 
 void GameEvents::start(engine::Scene& scene, std::int64_t tick) {
@@ -51,6 +56,8 @@ void GameEvents::start(engine::Scene& scene, std::int64_t tick) {
 }
 
 void GameEvents::spawn(engine::Scene& scene) {
+  if (alive_)
+    return;
   respawnPlayer(scene, robot_, grounded_);
   if (shape_)
     scene.addShape(robot_, *shape_);
