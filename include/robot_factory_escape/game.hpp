@@ -39,6 +39,7 @@ private:
   void render();
   void pumpNetwork(engine::Scene &scene, bool paused);
   void publishRobot(engine::Scene &scene, std::int64_t tick);
+  void publishLifeEvents(std::int64_t tick);
   void setStatusText(engine::Scene &scene, std::string message);
 
   // Window must outlive its renderer; members are destroyed in reverse order.

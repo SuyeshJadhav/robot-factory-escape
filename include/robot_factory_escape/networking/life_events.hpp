@@ -71,6 +71,14 @@ struct LifeEvent : engine::events::simpleEvent {
 
 static_assert(engine::events::networkedEvent<LifeEvent>);
 
+template <class Session>
+std::size_t publishLifeEvents(Session& session, const std::vector<LifeEvent>& notices,
+                               std::int64_t tick) {
+  for (const auto& event : notices)
+    session.send(LifeEvent::kType, event.encode(), tick);
+  return notices.size();
+}
+
 class LifeRelay {
 public:
   bool accept(const LifeEvent&, bool senderConnected);

@@ -53,6 +53,11 @@ void Game::run() {
                                                                publishRobot(ctx.scene, ctx.tick);
                                                            });
   rules_->postStart(*simulation_);
+  simulation_->post([this](engine::Scene& scene, engine::Timeline&) {
+    publishLifeEvents(0);
+    if (clientSession_ || peerSession_)
+      publishRobot(scene, 0);
+  });
   simulation_->start();
   engine::KeyboardState previous;
   using Clock = std::chrono::steady_clock;
@@ -74,7 +79,7 @@ void Game::run() {
           if (clientSession_ || peerSession_)
             publishRobot(scene, lastSimulationTick_);
         }
-        rules_->takeLifeEvents();
+        publishLifeEvents(lastSimulationTick_);
       });
       using namespace engine::SC;
       if (keyboard.justPressed(SDL_SCANCODE_P, previous))

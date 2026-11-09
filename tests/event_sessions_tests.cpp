@@ -1,4 +1,5 @@
 #include "test_support.hpp"
+#include <robot_factory_escape/gameplay/game_events.hpp>
 #include <robot_factory_escape/networking/life_events.hpp>
 #include <robot_factory_escape/networking/network_state.hpp>
 #include <engine/events/eventManager.hpp>
@@ -16,20 +17,30 @@ struct Endpoint {
   engine::events::eventManager events;
   engine::Scene scene;
   std::vector<robotNet::LifeEvent> received;
+  robotNet::RemoteLives lives;
+  std::unordered_set<engine::ClientId> departed;
+  std::optional<std::int64_t> frozenTick;
 
   explicit Endpoint(const std::string& address) : session(address) {
     events.subscribe<robotNet::LifeEvent>([this](const auto& event, engine::Scene&) {
       test::require(event.remote && event.from == engine::kServerId,
                     "accepted result carries server transport identity");
       received.push_back(event);
+      robotNet::observeRemoteLife(lives, event, session.id(), departed);
     }, true);
     test::require(session.join(), "socket client joins");
     session.start();
   }
   void poll(std::int64_t tick) {
     session.requestSnapshot(tick);
+    tick = frozenTick.value_or(tick);
     events.receive(session.drainMessages(), tick);
     events.run(scene, tick);
+    const auto local = session.replicator().entityOf(robotNet::robotId(session.id())).value_or(0);
+    for (const auto& [entity, transform] : scene.transforms())
+      if (const auto netId = session.replicator().netIdOf(entity))
+        robotNet::enforceRemoteLife(scene, local, session.replicator(), lives, *netId,
+                                    engine::Shape{.size = {96.f, 128.f}});
   }
 };
 
@@ -43,8 +54,74 @@ template <class Predicate> void until(Predicate predicate, const char* message) 
   throw std::runtime_error(message);
 }
 
+void eventOnlyLocalLifecycle() {
+  engine::networking::sessionServer server("tcp://127.0.0.1:0");
+  engine::Scene serverScene;
+  robotNet::LifeServer service(server);
+  server.publishScene(serverScene, 0);
+  server.start();
+  const auto address = "tcp://127.0.0.1:" + std::to_string(server.port());
+  Endpoint a(address), b(address);
+  const auto world = factory::createWorld(a.scene);
+  const auto local = factory::createPlayer(a.scene, world);
+  a.session.replicator().track(local);
+  const auto ownB = b.scene.createEntity();
+  b.session.replicator().track(ownB);
+  bool grounded = false;
+  GameProgress progress;
+  factory::GameEvents rules(a.events, world, local, a.session.id(), false, grounded, progress);
+  rules.start(a.scene, 0);
+  a.frozenTick = 0;
+  const auto id = robotNet::robotId(a.session.id());
+  a.session.replicator().setExtra(id, robotNet::encode({0, 0, 0, 1, true}));
+  test::require(b.session.replicator().apply(b.scene,
+      a.session.replicator().encodeOwned(a.scene), a.session.id()), "initial replica setup");
+  const auto remote = *b.session.replicator().entityOf(id);
+  robotNet::reconcileRemotePose(b.scene, b.session.replicator(), b.lives, id);
+  std::int64_t tick = 0;
+  const auto pump = [&] {
+    ++tick;
+    service.pump(serverScene, tick, server.drainRosterEvents());
+    a.poll(tick);
+    b.poll(tick);
+  };
+  test::require(robotNet::publishLifeEvents(a.session, rules.takeLifeEvents(), 0) == 1,
+                "initial spawn produces exactly one send");
+  until([&] { pump(); return b.received.size() == 1; }, "initial lifecycle reaches replica");
+  a.scene.transform(local).position = a.scene.transform(world.drone).position;
+  engine::PhysicsSystem physics(1800.f);
+  const auto deathTick = ++tick;
+  a.frozenTick = deathTick;
+  test::require(rules.step(a.scene, physics, deathTick, 1.f / 60.f) == factory::TickResult::DroneHit,
+                "real local collision generates death before network publication");
+  test::require(robotNet::publishLifeEvents(a.session, rules.takeLifeEvents(), deathTick) == 1 &&
+                    robotNet::publishLifeEvents(a.session, rules.takeLifeEvents(), deathTick) == 0,
+                "one local death sends once and second drain sends nothing");
+  until([&] { pump(); return b.lives.alive(id) == false; }, "event-only death reaches replica");
+  test::require(!b.scene.getShape(remote) && !rules.alive() && rules.revision() == 2 &&
+                    !a.lives.alive(id), "remote hides while local echo cannot change local lifecycle");
+  a.frozenTick = deathTick + 60;
+  a.events.run(a.scene, *a.frozenTick);
+  test::require(rules.alive() && rules.revision() == 3, "scheduled local spawn occurs");
+  test::require(robotNet::publishLifeEvents(a.session, rules.takeLifeEvents(), *a.frozenTick) == 1 &&
+                    robotNet::publishLifeEvents(a.session, rules.takeLifeEvents(), *a.frozenTick) == 0,
+                "one local respawn sends once and drains its outbox");
+  until([&] { pump(); return b.lives.alive(id) == true; }, "event-only spawn reaches replica");
+  test::require(b.scene.getShape(remote) &&
+                    b.scene.transform(remote).position == a.scene.transform(local).position &&
+                    b.received.size() == 3,
+                "spawn event restores remote artwork and pose without newer snapshot application");
+  const auto metadata = robotNet::decode(*b.session.replicator().extraOf(id));
+  test::require(metadata && metadata->lifeRevision == 1,
+                "replica metadata stayed at initial state: lifecycle proof is event-only");
+  a.session.leave();
+  b.session.leave();
+  server.stop();
+}
+
 int main() {
   return test::run([] {
+    eventOnlyLocalLifecycle();
     engine::networking::sessionServer server("tcp://127.0.0.1:0");
     engine::Scene scene;
     robotNet::LifeServer life(server);

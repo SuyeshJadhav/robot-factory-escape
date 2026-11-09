@@ -26,7 +26,7 @@ void Game::update(engine::Scene &scene, float deltaSeconds) {
     break;
   }
   sprites_.update(scene,robot_,grounded_,progress_.won,deltaSeconds);
-  rules_->takeLifeEvents();
+  publishLifeEvents(lastSimulationTick_);
 }
 
 void Game::setStatusText(engine::Scene &scene, std::string message) {

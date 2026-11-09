@@ -35,10 +35,20 @@ void Game::connectNetwork(const NetworkOptions &network) {
                     peerToPeer_ ? "peer-to-peer" : "client-server");
 }
 
+void Game::publishLifeEvents(std::int64_t tick) {
+  const auto notices = rules_->takeLifeEvents();
+  if (peerSession_)
+    robotNet::publishLifeEvents(*peerSession_, notices, tick);
+  else if (clientSession_)
+    robotNet::publishLifeEvents(*clientSession_, notices, tick);
+}
+
 void Game::publishRobot(engine::Scene &scene, std::int64_t tick) {
   auto &replicator = peerToPeer_ ? peerSession_->replicator() : clientSession_->replicator();
-  replicator.setExtra(robotNet::robotId(localClientId_),
-                      robotNet::encode(sprites_.state(scene, robot_)));
+  auto state = sprites_.state(scene, robot_);
+  state.lifeRevision = rules_->revision();
+  state.alive = rules_->alive();
+  replicator.setExtra(robotNet::robotId(localClientId_), robotNet::encode(state));
   if (peerToPeer_)
     peerSession_->publishScene(scene, tick);
   else
