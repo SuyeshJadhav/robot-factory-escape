@@ -25,6 +25,7 @@ add_game_test(event_remote)
 add_game_test(event_relay)
 add_game_test(event_sessions)
 add_game_test(event_presentation)
+add_game_test(event_replay)
 set_tests_properties(event_sessions PROPERTIES TIMEOUT 40)
 set_tests_properties(factory_network_sessions PROPERTIES TIMEOUT 90)
 
