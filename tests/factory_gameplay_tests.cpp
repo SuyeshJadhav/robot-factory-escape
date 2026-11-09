@@ -77,17 +77,29 @@ int main() {
     factory::assignSpawn(scene, w, robot, 2);
     scene.transform(robot).position = {2100.f, 1000.f};
     scene.getRigidBody(robot)->velocity = {100.f, 100.f};
-    auto result =
-        factory::tickPlayer(scene, physics, w, robot, grounded, progress, 1.f / 120.f, false);
-    test::require(result == factory::TickResult::DeathZone &&
-                      scene.transform(robot).position == glm::vec2{360.f, 300.f} &&
-                      scene.getRigidBody(robot)->velocity == glm::vec2{0.f, 0.f} && !grounded,
-                  "production tick respawns on trigger, not on a Y-only fallback");
+    engine::EntityId contact = 0;
+    auto result = factory::tickPlayer(scene, physics, w, robot, grounded, progress, 1.f / 120.f,
+                                      false, &contact);
+    test::require(result == factory::TickResult::DeathZone && scene.has<factory::DeathZone>(contact) &&
+                      scene.transform(robot).position.x > 2100.f &&
+                      scene.transform(robot).position.y > 1000.f &&
+                      scene.getRigidBody(robot)->velocity != glm::vec2{0.f, 0.f},
+                  "pit detection reports the real death zone without respawning");
     scene.transform(robot).position = scene.transform(w.drone).position;
-    result = factory::tickPlayer(scene, physics, w, robot, grounded, progress, 1.f / 120.f, false);
-    test::require(result == factory::TickResult::DroneHit &&
-                      scene.transform(robot).position.x == 360.f,
-                  "drone uses assigned spawn");
+    contact = 0;
+    result = factory::tickPlayer(scene, physics, w, robot, grounded, progress, 1.f / 120.f, false,
+                                 &contact);
+    test::require(result == factory::TickResult::DroneHit && contact == w.drone &&
+                      scene.transform(robot).position.x > 1000.f,
+                  "drone detection reports the drone and leaves the collision position");
+    contact = 77;
+    scene.transform(robot).position = {3000.f, 410.f};
+    result = factory::tickPlayer(scene, physics, w, robot, grounded, progress, 1.f / 120.f, false,
+                                 &contact);
+    test::require(result == factory::TickResult::Won && contact == 77,
+                  "non-lethal results do not invent a hazard contact");
+    progress.won = false;
+    scene.getRigidBody(robot)->velocity = {0.f, 0.f};
     scene.transform(robot).position = {3000.f, 410.f};
     result = factory::tickPlayer(scene, physics, w, robot, grounded, progress, 1.f / 120.f, false);
     test::require(result == factory::TickResult::Won && progress.won, "new exit is functional");

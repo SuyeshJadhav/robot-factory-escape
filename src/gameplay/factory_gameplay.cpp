@@ -5,7 +5,7 @@
 namespace factory {
 TickResult tickPlayer(engine::Scene &scene, engine::PhysicsSystem &physics, const World &world,
                       engine::EntityId robot, bool &grounded, GameProgress &progress, float dt,
-                      bool ownsWorld) {
+                      bool ownsWorld, engine::EntityId *contact) {
   if (progress.won)
     return TickResult::None;
   float remaining = std::clamp(dt, 0.f, 0.1f);
@@ -19,11 +19,13 @@ TickResult tickPlayer(engine::Scene &scene, engine::PhysicsSystem &physics, cons
     }
     movePlayer(scene, physics, robot, world.solids, step, grounded);
     if (physics.isCollision(scene, robot, world.drone)) {
-      respawnPlayer(scene, robot, grounded);
+      if (contact)
+        *contact = world.drone;
       return TickResult::DroneHit;
     }
-    if (inDeathZone(scene, physics, robot)) {
-      respawnPlayer(scene, robot, grounded);
+    if (const auto zone = deathZoneContact(scene, physics, robot)) {
+      if (contact)
+        *contact = *zone;
       return TickResult::DeathZone;
     }
     if (progress.checkExit(scene, physics, robot, world.exit))

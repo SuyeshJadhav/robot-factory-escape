@@ -21,8 +21,11 @@ int main() {
                     "respawn clears velocity and support");
     }
     test::require(!factory::inDeathZone(scene, physics, robot), "spawn is safe");
+    test::require(!factory::deathZoneContact(scene, physics, robot), "safe spawn has no zone contact");
     scene.transform(robot).position = {2100.f, 990.f};
     test::require(factory::inDeathZone(scene, physics, robot), "AABB enters pit death zone");
+    const auto pit = factory::deathZoneContact(scene, physics, robot);
+    test::require(pit && scene.has<factory::DeathZone>(*pit), "death zone helper identifies a real zone");
     scene.transform(robot).position = {2050.f, 850.f};
     test::require(!factory::inDeathZone(scene, physics, robot), "above pit is not a death");
     scene.transform(robot).position = {-1.f, 300.f};

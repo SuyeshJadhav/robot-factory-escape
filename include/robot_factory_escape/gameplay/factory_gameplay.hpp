@@ -4,6 +4,7 @@
 namespace factory {
 enum class TickResult { None, DroneHit, DeathZone, Won };
 TickResult tickPlayer(engine::Scene &, engine::PhysicsSystem &, const World &, engine::EntityId,
-                      bool &, GameProgress &, float dt, bool ownsWorld);
+                      bool &, GameProgress &, float dt, bool ownsWorld,
+                      engine::EntityId *contact = nullptr);
 void restartPlayer(engine::Scene &, engine::EntityId, bool &, GameProgress &, bool ownsWorld);
 } // namespace factory

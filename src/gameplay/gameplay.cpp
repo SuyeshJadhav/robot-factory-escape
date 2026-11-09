@@ -40,10 +40,12 @@ void Game::update(engine::Scene &scene, float deltaSeconds) {
                                           deltaSeconds,!clientSession_ && !peerSession_);
   switch (result) {
   case factory::TickResult::DroneHit:
+    factory::respawnPlayer(scene,robot_,grounded_);
     sprites_.reset(scene,robot_,world_.drone);
     setStatusText(scene,"STATUS: DRONE HIT - TRY AGAIN");
     break;
   case factory::TickResult::DeathZone:
+    factory::respawnPlayer(scene,robot_,grounded_);
     sprites_.reset(scene,robot_,world_.drone);
     setStatusText(scene,"STATUS: DEATH ZONE - BACK TO SPAWN");
     break;

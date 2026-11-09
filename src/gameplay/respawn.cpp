@@ -18,11 +18,16 @@ void respawnPlayer(engine::Scene &scene, engine::EntityId robot, bool &grounded)
     throw std::logic_error("invalid respawn target");
   resetRobot(scene, robot, scene.transform(target->spawn).position, grounded);
 }
-bool inDeathZone(engine::Scene &scene, const engine::PhysicsSystem &physics,
-                 engine::EntityId robot) {
+std::optional<engine::EntityId> deathZoneContact(engine::Scene &scene,
+                                                 const engine::PhysicsSystem &physics,
+                                                 engine::EntityId robot) {
   for (const auto &[zone, tag] : scene.all<DeathZone>())
     if (physics.isCollision(scene, robot, zone))
-      return true;
-  return false;
+      return zone;
+  return std::nullopt;
+}
+bool inDeathZone(engine::Scene &scene, const engine::PhysicsSystem &physics,
+                 engine::EntityId robot) {
+  return deathZoneContact(scene, physics, robot).has_value();
 }
 } // namespace factory
