@@ -11,8 +11,68 @@ std::optional<glm::vec2> recordedRobot(const engine::Scene* frame) {
   return std::nullopt;
 }
 
+void playbackIsolationAndVisibility() {
+  engine::Scene live;
+  const auto world = factory::createWorld(live);
+  const auto robot = factory::createPlayer(live, world);
+  engine::events::eventManager events;
+  factory::ReplaySession replay(events, 0);
+  events.raise(engine::events::replayPlayStart{}, 0);
+  events.run(live, 0);
+  test::require(!replay.playing() && !replay.update(live, world, robot, false, 0),
+                "empty recording does not enter playback");
+  events.raise(engine::events::replayRecordStart{}, 0);
+  events.run(live, 0);
+  live.transform(robot).position = {100.f, 300.f};
+  live.getShape(robot)->texture = 7;
+  const auto artwork = *live.getShape(robot);
+  live.addSpriteAnimation(robot, {0, {{9, 0.2f}, {11, 0.2f}}, true, 1});
+  replay.update(live, world, robot, false, 1);
+  live.removeShape(robot);
+  live.removeSpriteAnimation(robot);
+  replay.update(live, world, robot, false, 2);
+  live.addShape(robot, artwork);
+  live.addSpriteAnimation(robot, {0, {{9, 0.2f}}, true});
+  live.transform(robot).position = {300.f, 300.f};
+  replay.update(live, world, robot, false, 3);
+  events.raise(engine::events::replayRecordStop{}, 3);
+  events.run(live, 3);
+  live.transform(robot).position = {700.f, 300.f};
+  live.getRigidBody(robot)->velocity = {99.f, 123.f};
+  const auto count = live.transforms().size();
+  events.raise(engine::events::replayPlayStart{}, 4);
+  events.run(live, 4);
+  const auto* frame = replay.update(live, world, robot, false, 4);
+  test::require(frame && frame != &live && !replay.recording() &&
+                    recordedRobot(frame) == glm::vec2{100.f, 300.f} &&
+                    frame->all<engine::SpriteAnimation>().begin()->second.frames[0].index == 11,
+                "first recorded frame and held animation are reconstructed before advancing");
+  frame = replay.update(live, world, robot, false, 5);
+  test::require(frame && !recordedRobot(frame) && frame->all<factory::ReplayView>().size() == 1,
+                "death sample hides robot while retaining replay presentation marker");
+  frame = replay.update(live, world, robot, false, 6);
+  test::require(frame && recordedRobot(frame) == glm::vec2{300.f, 300.f} &&
+                    frame->all<engine::SpriteAnimation>().begin()->second.frames[0].index == 9,
+                "spawn sample restores recorded robot artwork and pose");
+  test::require(!replay.update(live, world, robot, false, 7) && !replay.playing(),
+                "natural completion returns live presentation");
+  events.raise(engine::events::replayPlayStart{}, 8);
+  events.run(live, 8);
+  replay.update(live, world, robot, false, 8);
+  events.raise(engine::events::replayPlayStop{}, 9);
+  events.run(live, 9);
+  test::require(!replay.playing() && !replay.update(live, world, robot, false, 9),
+                "manual stop returns live presentation");
+  test::require(live.transform(robot).position == glm::vec2{700.f, 300.f} &&
+                    live.getRigidBody(robot)->velocity == glm::vec2{99.f, 123.f} &&
+                    live.getShape(robot)->texture == 7 && live.transforms().size() == count &&
+                    live.all<factory::ReplayView>().empty(),
+                "playback never mutates live transforms, motion, artwork, or entity collection");
+}
+
 int main() {
   return test::run([] {
+    playbackIsolationAndVisibility();
     engine::Scene live;
     const auto world = factory::createWorld(live);
     const auto robot = factory::createPlayer(live, world);
