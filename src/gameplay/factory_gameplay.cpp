@@ -33,11 +33,5 @@ TickResult tickPlayer(engine::Scene &scene, engine::PhysicsSystem &physics, cons
   }
   return TickResult::None;
 }
-void restartPlayer(engine::Scene &scene, engine::EntityId robot, bool &grounded,
-                   GameProgress &progress, bool ownsWorld) {
-  respawnPlayer(scene, robot, grounded);
-  progress.won = false;
-  if (ownsWorld)
-    resetWorld(scene);
-}
+
 } // namespace factory

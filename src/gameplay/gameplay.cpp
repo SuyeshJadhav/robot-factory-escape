@@ -5,13 +5,6 @@
 #include <algorithm>
 #include <utility>
 
-void Game::restart(engine::Scene &scene) {
-  factory::restartPlayer(scene,robot_,grounded_,progress_,!clientSession_ && !peerSession_);
-  sprites_.reset(scene,robot_,world_.drone);
-  renderedWon_.store(false);
-  setStatusText(scene,"STATUS: AVOID THE PATROL DRONE");
-  engine::log::info("Restarted. Reach the exit!");
-}
 
 void Game::update(engine::Scene &scene, float deltaSeconds) {
   const bool wasAlive = rules_->alive();

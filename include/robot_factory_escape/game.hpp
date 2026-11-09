@@ -30,7 +30,7 @@ public:
 
 private:
   void createLevel();
-  void restart(engine::Scene &scene);
+
   void connectNetwork(const NetworkOptions &network);
   void handleControls(engine::Scene&, const engine::events::inputEvent&);
   void update(engine::Scene &scene, float deltaSeconds);
@@ -57,7 +57,6 @@ private:
   engine::EntityId fpsText_{};
   engine::TextureId backdropTexture_{};
   GameSprites sprites_;
-
 
   bool grounded_ = false;
   GameProgress progress_;

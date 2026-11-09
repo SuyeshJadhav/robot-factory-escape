@@ -28,9 +28,64 @@ void initialSpawnPrecedesFirstTick() {
   test::require(called, "bootstrap test actually executes a simulation callback");
 }
 
+void postedRestartWhilePaused() {
+  engine::Scene scene;
+  const auto world = factory::createWorld(scene);
+  const auto robot = factory::createPlayer(scene, world);
+  factory::assignSpawn(scene, world, robot, 2);
+  bool grounded = false;
+  GameProgress progress;
+  engine::events::eventManager events;
+  factory::GameEvents rules(events, world, robot, 2, false, grounded, progress);
+  engine::PhysicsSystem physics(gameSettings::gravity);
+  std::int64_t counter = 0, tick = 0;
+  engine::Timeline clock(&counter, 60);
+  engine::Timeline time(clock, 60);
+  int calls = 0;
+  engine::SimulationThread simulation(std::move(scene), time, [&](const engine::TickContext& ctx) {
+    ++calls;
+    tick = ctx.tick;
+    rules.step(ctx.scene, physics, tick, ctx.dt);
+  });
+  rules.postStart(simulation);
+  simulation.advanceFrame();
+  ++counter;
+  simulation.advanceFrame();
+  simulation.post([&](engine::Scene& owned, engine::Timeline& timeline) {
+    events.raise(engine::events::deathEvent{{}, robot, world.drone}, tick);
+    events.run(owned, tick);
+    progress.won = true;
+    timeline.pause();
+  });
+  simulation.advanceFrame();
+  const auto before = calls;
+  counter += 10;
+  simulation.post([&](engine::Scene& owned, engine::Timeline&) {
+    engine::KeyboardState now, previous;
+    now.setKey(engine::SC::SDL_SCANCODE_R, true);
+    rules.input(owned, now, previous, tick);
+    test::require(rules.alive() && !progress.won &&
+                      owned.transform(robot).position == glm::vec2{360.f, 300.f},
+                  "posted_R_while_paused_respawns_without_advancing_physics");
+  });
+  simulation.advanceFrame();
+  test::require(calls == before && before > 0, "paused restart test ran no physics tick");
+  simulation.post([&](engine::Scene& owned, engine::Timeline& timeline) {
+    owned.transform(robot).position = {700.f, 500.f};
+    timeline.unpause();
+  });
+  simulation.advanceFrame();
+  counter += 70;
+  simulation.advanceFrame();
+  const auto frame = simulation.takeRenderFrame();
+  test::require(frame && frame->scene.transform(robot).position.x == 700.f && calls > before,
+                "resuming past canceled respawn cannot teleport restarted robot");
+}
+
 int main() {
   return test::run([] {
     initialSpawnPrecedesFirstTick();
+    postedRestartWhilePaused();
     EventRig drone;
     drone.scene.transform(drone.robot).position = drone.scene.transform(drone.world.drone).position;
     drone.scene.getRigidBody(drone.robot)->velocity = {100.f, 100.f};
