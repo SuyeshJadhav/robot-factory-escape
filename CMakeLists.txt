@@ -5,9 +5,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Download the pinned Milestone 3 engine unless a local checkout is supplied.
+# Download the pinned Milestone 4 engine unless a local checkout is supplied.
 set(GEF_ENGINE_DIR "" CACHE PATH
-    "Optional local GEF_engine checkout; use current PR source for Milestone 4 development")
+    "Optional local GEF_engine v0.4.0-compatible checkout")
 set(ENGINE_BUILD_TESTS OFF CACHE BOOL "Build engine tests" FORCE)
 if(GEF_ENGINE_DIR)
     get_filename_component(GAME_ENGINE_SOURCE_DIR "${GEF_ENGINE_DIR}" ABSOLUTE
@@ -22,7 +22,7 @@ else()
     include(FetchContent)
     FetchContent_Declare(gef_engine
         GIT_REPOSITORY https://github.com/ShounakDeshmukh/GEF_engine.git
-        GIT_TAG 0ec1cba862c91d2ed19bf2cf9b890cd51a5dede3 # v0.3.0
+        GIT_TAG 603154b11de36bbf837605fa3da43d949b3f4a5f # v0.4.0
         SYSTEM
         EXCLUDE_FROM_ALL
     )
@@ -33,9 +33,9 @@ foreach(feature IN ITEMS engine/events/eventManager.hpp engine/replay/replayReco
     if(NOT EXISTS "${GAME_ENGINE_SOURCE_DIR}/include/${feature}")
         message(FATAL_ERROR
             "Milestone 4 event/replay headers are required: ${feature}\n"
-            "Select the current engine PR checkout with "
-            "-DGEF_ENGINE_DIR=/path/to/current-pr-checkout. "
-            "The final Milestone 4 engine dependency has not been selected yet.")
+            "Use GEF_engine v0.4.0 or a compatible checkout with "
+            "-DGEF_ENGINE_DIR=/path/to/GEF_engine, or clear "
+            "-DGEF_ENGINE_DIR= to download the pinned release.")
     endif()
 endforeach()
 set(GAME_HUD_FONT "${GAME_ENGINE_SOURCE_DIR}/examples/hello_entity/assets/SuperBouncer.ttf")
