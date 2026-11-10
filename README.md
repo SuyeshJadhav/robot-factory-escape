@@ -6,7 +6,7 @@ client-server multiplayer, hybrid peer-to-peer multiplayer, and manual replay.
 Input, lethal collisions, death, and spawn are handled through engine events.
 Remote death/spawn HUD notices are delivered through the network event channel.
 
-## Quick start for graders
+## Quick start
 
 **Build the game from this repository. No separate engine clone, sibling folder,
 or edit to the engine is required.** CMake downloads the released engine
