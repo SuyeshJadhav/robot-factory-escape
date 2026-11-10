@@ -300,5 +300,3 @@ limitation when recorded ticks contain gaps; no engine timing fix is claimed her
   engine's code license.
 - Supporting libraries: SDL3/image/ttf, GLM, fmt, spdlog, nlohmann/json, and
   cppzmq/ZeroMQ, fetched by the engine under their respective upstream licenses.
-- AI assistance: Hermes Agent (Nous Research) assisted with planning,
-  implementation, debugging, verification, and documentation.
