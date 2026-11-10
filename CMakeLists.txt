@@ -65,8 +65,7 @@ target_compile_options(robot_factory_core PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic>
 )
 
-add_executable(robot_factory_escape
-    src/app/main.cpp
+set(GAME_APP_SOURCES
     src/app/game.cpp
     src/app/game_loop.cpp
     src/gameplay/level.cpp
@@ -74,11 +73,14 @@ add_executable(robot_factory_escape
     src/networking/game_network.cpp
     src/graphics/game_render.cpp
 )
+list(TRANSFORM GAME_APP_SOURCES PREPEND "${PROJECT_SOURCE_DIR}/")
+add_executable(robot_factory_escape src/app/main.cpp ${GAME_APP_SOURCES})
 target_link_libraries(robot_factory_escape PRIVATE robot_factory_core)
-target_compile_definitions(robot_factory_escape PRIVATE
+set(GAME_APP_DEFINITIONS
     GAME_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets/sprites/"
     GAME_FONT_PATH="${GAME_HUD_FONT}"
 )
+target_compile_definitions(robot_factory_escape PRIVATE ${GAME_APP_DEFINITIONS})
 target_compile_options(robot_factory_escape PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic>
 )
