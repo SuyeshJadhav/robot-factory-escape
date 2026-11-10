@@ -21,6 +21,8 @@ template <class Session> struct Endpoint {
   engine::Scene scene;
   std::vector<robotNet::LifeEvent> received;
   robotNet::RemoteLives lives;
+  robotNet::LifeNotices noticeState;
+  std::vector<std::string> notices;
   std::unordered_set<engine::ClientId> departed;
   std::optional<std::int64_t> frozenTick;
 
@@ -36,6 +38,8 @@ template <class Session> struct Endpoint {
                     "accepted result carries server transport identity");
       received.push_back(event);
       robotNet::observeRemoteLife(lives, event, session.id(), departed);
+      if (const auto notice = noticeState.receive(event, session.id(), departed))
+        notices.push_back(*notice);
     }, true);
     test::require(session.join(), "socket client joins");
     session.start();
@@ -127,6 +131,7 @@ template <class Session> void eventOnlyLocalLifecycle() {
         "late join while dead receives cached death result");
   const auto lateReplica = *lateDead.session.replicator().entityOf(id);
   test::require(lateDead.received[0].kind == robotNet::LifeKind::Death &&
+                    lateDead.received[0].repair && lateDead.notices.empty() &&
                     lateDead.lives.alive(id) == false && !lateDead.scene.getShape(lateReplica),
                 "late join stays dead instead of inventing a live remote robot");
   a.frozenTick = deathTick + 60;
@@ -147,6 +152,7 @@ template <class Session> void eventOnlyLocalLifecycle() {
   until([&] { pump(); return lateDead.lives.alive(id) == true; },
         "late-joining endpoint also receives respawn");
   test::require(lateDead.scene.getShape(lateReplica) &&
+                    lateDead.notices.size() == 1 &&
                     lateDead.scene.transform(lateReplica).position == glm::vec2{360.f, 300.f},
                 "late join restores owner-assigned spawn through the event channel");
   a.session.leave();
@@ -198,7 +204,7 @@ template <class Session> void relaySocketScenario() {
     active.push_back(&late);
     until([&] { pump(); return !late.received.empty(); }, "late join receives cached lifecycle");
     test::require(late.received.size() == 1 && late.received[0].entity == spawn.entity &&
-                      late.received[0].revision == 3,
+                      late.received[0].revision == 3 && late.received[0].repair && late.notices.empty(),
                   "late join repairs to newest lifecycle, not historical death");
     const auto departed = a.session.id();
     a.session.leave();

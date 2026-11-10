@@ -47,8 +47,10 @@ void Game::run() {
         handleControls(scene, e);
       });
   events_.subscribe<robotNet::LifeEvent>(
-      [this](const robotNet::LifeEvent& e, engine::Scene&) {
+      [this](const robotNet::LifeEvent& e, engine::Scene& scene) {
         robotNet::observeRemoteLife(remoteLives_, e, localClientId_, departedIds_);
+        if (const auto notice = lifeNotices_.receive(e, localClientId_, departedIds_))
+          setStatusText(scene, *notice);
       }, true);
   simulation_ = std::make_unique<engine::SimulationThread>(scene_, gameTime_,
                                                            [this](const engine::TickContext &ctx) {

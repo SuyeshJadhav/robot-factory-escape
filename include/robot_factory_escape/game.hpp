@@ -76,6 +76,7 @@ private:
   std::unordered_set<engine::ClientId> remoteIds_;
   std::unordered_set<engine::ClientId> departedIds_;
   robotNet::RemoteLives remoteLives_;
+  robotNet::LifeNotices lifeNotices_;
   std::unordered_map<engine::NetId, robotNet::AnimationState> remoteAnimation_;
   bool peerToPeer_ = false;
   bool connected_ = true;

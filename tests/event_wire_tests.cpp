@@ -19,7 +19,7 @@ int main() {
   test::require(!received->remote && received->from == engine::kServerId,
                 "transport metadata is not supplied by the payload");
   const auto valid = sent.encode();
-  test::require(valid.size() == 18 && valid[0] == std::byte{1} &&
+  test::require(valid.size() == 19 && valid[0] == std::byte{2} &&
                     valid[1] == std::byte{1} && valid[5] == std::byte{2} &&
                     valid[6] == std::byte{7},
                 "version, kind, owner and revision have the agreed byte layout");
@@ -30,8 +30,11 @@ int main() {
   bytes.push_back(std::byte{0});
   test::require(!robotNet::LifeEvent::decode(bytes), "trailing data is rejected");
   bytes = valid;
-  bytes[0] = std::byte{2};
+  bytes[0] = std::byte{3};
   test::require(!robotNet::LifeEvent::decode(bytes), "unknown version is rejected");
+  bytes = valid;
+  bytes[18] = std::byte{2};
+  test::require(!robotNet::LifeEvent::decode(bytes), "unknown repair flag is rejected");
   bytes = valid;
   bytes[1] = std::byte{2};
   test::require(!robotNet::LifeEvent::decode(bytes), "unknown lifecycle kind is rejected");

@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -27,12 +28,13 @@ struct LifeEvent : engine::events::simpleEvent {
   std::uint32_t revision = 0;
   LifeKind kind = LifeKind::Spawn;
   glm::vec2 position{0.f, 0.f};
+  bool repair = false; // Server-only late-join delivery, not a new gameplay occurrence.
 
   engine::networking::Bytes encode() const {
     static_assert(sizeof(float) == sizeof(std::uint32_t));
     engine::networking::Bytes out;
-    out.reserve(18);
-    out.push_back(std::byte{1});
+    out.reserve(19);
+    out.push_back(std::byte{2});
     out.push_back(std::byte{static_cast<std::uint8_t>(kind)});
     const auto append = [&out](std::uint32_t value) {
       for (unsigned shift = 0; shift != 32; shift += 8)
@@ -42,11 +44,13 @@ struct LifeEvent : engine::events::simpleEvent {
     append(revision);
     append(std::bit_cast<std::uint32_t>(position.x));
     append(std::bit_cast<std::uint32_t>(position.y));
+    out.push_back(std::byte{static_cast<std::uint8_t>(repair)});
     return out;
   }
 
   static std::optional<LifeEvent> decode(engine::networking::ByteView in) {
-    if (in.size() != 18 || in[0] != std::byte{1})
+    if (in.size() != 19 || in[0] != std::byte{2} ||
+        std::to_integer<std::uint8_t>(in[18]) > 1)
       return std::nullopt;
     const auto kind = std::to_integer<std::uint8_t>(in[1]);
     if (kind > 1)
@@ -61,6 +65,7 @@ struct LifeEvent : engine::events::simpleEvent {
     event.entity = read(2);
     event.revision = read(6);
     event.kind = static_cast<LifeKind>(kind);
+    event.repair = in[18] == std::byte{1};
     event.position = {std::bit_cast<float>(read(10)), std::bit_cast<float>(read(14))};
     if (event.revision == 0 || !std::isfinite(event.position.x) ||
         !std::isfinite(event.position.y))
@@ -78,6 +83,16 @@ std::size_t publishLifeEvents(Session& session, const std::vector<LifeEvent>& no
     session.send(LifeEvent::kType, event.encode(), tick);
   return notices.size();
 }
+
+// Deliberately independent of RemoteLives: snapshots cannot synthesize or dedupe notices.
+class LifeNotices {
+public:
+  std::optional<std::string> receive(const LifeEvent&, engine::ClientId self,
+                                      const std::unordered_set<engine::ClientId>& departed);
+  void forget(engine::ClientId owner) { revisions_.erase(owner); }
+private:
+  std::unordered_map<engine::ClientId, std::uint32_t> revisions_;
+};
 
 class LifeRelay {
 public:

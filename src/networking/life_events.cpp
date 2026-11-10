@@ -16,8 +16,24 @@ bool validLife(const LifeEvent& event) {
 }
 }
 
+std::optional<std::string> LifeNotices::receive(const LifeEvent& event, engine::ClientId self,
+                                  const std::unordered_set<engine::ClientId>& departed) {
+  const auto owner = engine::ownerOf(event.entity);
+  if (!event.remote || event.from != engine::kServerId || owner == self ||
+      departed.contains(owner) || !validLife(event))
+    return std::nullopt;
+  auto& revision = revisions_[owner];
+  if (event.revision <= revision)
+    return std::nullopt;
+  revision = event.revision;
+  if (event.repair)
+    return std::nullopt;
+  return "STATUS: PLAYER " + std::to_string(owner) +
+      (event.kind == LifeKind::Death ? " DESTROYED" : " SPAWNED");
+}
+
 bool LifeRelay::accept(const LifeEvent& event, bool senderConnected) {
-  if (!senderConnected || !event.remote || event.from == engine::kServerId ||
+  if (!senderConnected || event.repair || !event.remote || event.from == engine::kServerId ||
       event.from > engine::kMaxClientIdPerRun || !validLife(event) ||
       event.entity != robotId(event.from))
     return false;
@@ -58,8 +74,10 @@ void LifeServer::pump(engine::Scene& scene, std::int64_t tick,
     if (change.change == engine::networking::RosterChange::Left) {
       relay_.forget(change.client.id);
     } else {
-      for (const auto& event : relay_.latest())
+      for (auto event : relay_.latest()) {
+        event.repair = true;
         server_.send(change.client.id, LifeEvent::kType, event.encode(), tick);
+      }
     }
   }
   events_.receive(server_.drainMessages(), tick);

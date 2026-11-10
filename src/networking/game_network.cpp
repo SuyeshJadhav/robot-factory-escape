@@ -62,6 +62,7 @@ void Game::pumpNetwork(engine::Scene &scene, bool paused) {
     departedIds_.insert(owner);
     remoteIds_.erase(owner);
     remoteLives_.forget(owner);
+    lifeNotices_.forget(owner);
     remoteAnimation_.erase(robotNet::robotId(owner));
   };
   if (peerToPeer_) {
