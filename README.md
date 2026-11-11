@@ -283,8 +283,10 @@ validation.
 
 Debug and Release regression gates, real application headless probes, and
 user-reported desktop checks of offline/replay and both local two-client modes
-have passed on Linux. Separate-machine LAN, macOS, and Windows behavior remain
-unverified. The team replay controller also has a known stored-sample timing
+have passed on Linux. A user-reported run on two separate devices on one LAN
+worked in both client-server and peer-to-peer modes; it was manual, with no
+latency measurements. macOS and Windows behavior remain unverified. The team
+replay controller also has a known stored-sample timing
 limitation when recorded ticks contain gaps; no engine timing fix is claimed here.
 
 ## Credits
